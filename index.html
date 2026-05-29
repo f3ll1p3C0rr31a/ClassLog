@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <title>ClassLog</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="students">
+    <main class="app-shell">
+      <section class="hero-card">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Etapa 1</p>
+          <h1 id="pageTitle">Selecionar alunos</h1>
+          <p class="hero-copy" id="pageDescription">Escolha um ou mais alunos para iniciar a ocorrência.</p>
+        </div>
+        <div class="hero-stats">
+          <article>
+            <span id="todayCount">0</span>
+            <small>hoje</small>
+          </article>
+          <article>
+            <span id="selectedCount">0</span>
+            <small>selecionados</small>
+          </article>
+          <article>
+            <span id="lastSavedLabel">--</span>
+            <small>último registro</small>
+          </article>
+        </div>
+      </section>
+
+      <nav class="step-nav">
+        <a class="step-link active" href="index.html">Alunos</a>
+        <a class="step-link" href="occurrence.html">Ocorrência</a>
+        <a class="step-link" href="finalize.html">Salvar</a>
+        <a class="step-link" href="history.html">Histórico</a>
+      </nav>
+
+      <section class="panel" id="studentsPanel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Etapa 1</p>
+            <h2>Seleção rápida</h2>
+          </div>
+          <button class="ghost-button" type="button" id="clearStudentButton">Limpar</button>
+        </div>
+        <label class="field">
+          <span>Buscar nome</span>
+          <input id="studentSearch" type="search" placeholder="Digite para filtrar..." autocomplete="off" />
+        </label>
+        <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
+        <div class="chips" id="studentChips" aria-live="polite"></div>
+        <div class="page-actions">
+          <button class="primary-button" type="button" id="studentNextButton">Ir para ocorrência</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

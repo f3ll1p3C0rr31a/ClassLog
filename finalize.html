@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <title>ClassLog</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="finalize">
+    <main class="app-shell">
+      <section class="hero-card">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Etapa 3</p>
+          <h1 id="pageTitle">Encerrar e salvar</h1>
+          <p class="hero-copy" id="pageDescription">Revise data, localização, foto e observação antes de salvar.</p>
+        </div>
+        <div class="hero-stats">
+          <article>
+            <span id="todayCount">0</span>
+            <small>hoje</small>
+          </article>
+          <article>
+            <span id="selectedCount">0</span>
+            <small>selecionados</small>
+          </article>
+          <article>
+            <span id="lastSavedLabel">--</span>
+            <small>último registro</small>
+          </article>
+        </div>
+      </section>
+
+      <nav class="step-nav">
+        <a class="step-link" href="index.html">Alunos</a>
+        <a class="step-link" href="occurrence.html">Ocorrência</a>
+        <a class="step-link active" href="finalize.html">Salvar</a>
+        <a class="step-link" href="history.html">Histórico</a>
+      </nav>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Resumo</p>
+            <h2 id="selectedSummary">Nenhum aluno selecionado</h2>
+          </div>
+        </div>
+        <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
+        <p class="hint" id="occurrenceHint">Use a etapa anterior para definir a ocorrência.</p>
+      </section>
+
+      <section class="panel" id="finalizePanel">
+        <div class="grid-two">
+          <label class="field">
+            <span>Data e hora</span>
+            <input id="dateTime" type="datetime-local" />
+          </label>
+          <div class="location-box">
+            <div>
+              <p class="eyebrow">Localização</p>
+              <strong id="locationStatus">Ainda não capturada</strong>
+              <p id="locationDetail">Latitude e longitude serão preenchidas quando você permitir.</p>
+            </div>
+            <button class="primary-button" type="button" id="captureLocationButton">Capturar local</button>
+          </div>
+        </div>
+
+        <div class="panel-subsection">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Anexo</p>
+              <h2>Foto ou imagem</h2>
+            </div>
+          </div>
+          <div class="attachment-row">
+            <label class="file-button" for="photoInput">Selecionar foto</label>
+            <input id="photoInput" type="file" accept="image/*" capture="environment" />
+            <button class="ghost-button" type="button" id="removePhotoButton">Remover</button>
+          </div>
+          <div class="photo-preview" id="photoPreview">
+            <span>Nenhuma imagem adicionada</span>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Observações</span>
+          <textarea id="notes" rows="4" placeholder="Adicione uma observação ou detalhe não padronizado."></textarea>
+        </label>
+
+        <div class="page-actions split-actions">
+          <button class="ghost-button" type="button" id="finalizeBackButton">Voltar</button>
+          <button class="primary-button" type="button" id="saveButton">Encerrar e salvar</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <title>ClassLog</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="occurrence">
+    <main class="app-shell">
+      <section class="hero-card">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Etapa 2</p>
+          <h1 id="pageTitle">Escolher ocorrência</h1>
+          <p class="hero-copy" id="pageDescription">Selecione o tipo da ocorrência e avance.</p>
+        </div>
+        <div class="hero-stats">
+          <article>
+            <span id="todayCount">0</span>
+            <small>hoje</small>
+          </article>
+          <article>
+            <span id="selectedCount">0</span>
+            <small>selecionados</small>
+          </article>
+          <article>
+            <span id="lastSavedLabel">--</span>
+            <small>último registro</small>
+          </article>
+        </div>
+      </section>
+
+      <nav class="step-nav">
+        <a class="step-link" href="index.html">Alunos</a>
+        <a class="step-link active" href="occurrence.html">Ocorrência</a>
+        <a class="step-link" href="finalize.html">Salvar</a>
+        <a class="step-link" href="history.html">Histórico</a>
+      </nav>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Alunos escolhidos</p>
+            <h2 id="selectedSummary">Nenhum aluno selecionado</h2>
+          </div>
+        </div>
+        <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" id="occurrencePanel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Etapa 2</p>
+            <h2>Tipo da ocorrência</h2>
+          </div>
+        </div>
+        <div class="chips chips-strong" id="occurrenceChips"></div>
+        <div class="field hidden" id="otherOccurrenceField">
+          <label for="otherOccurrence"><span>Ocorrência não padronizada</span></label>
+          <input id="otherOccurrence" type="text" placeholder="Ex.: atraso na troca de aula" />
+        </div>
+        <p class="hint" id="occurrenceHint">Selecione um ou mais alunos para liberar esta etapa.</p>
+        <div class="page-actions split-actions">
+          <button class="ghost-button" type="button" id="occurrenceBackButton">Voltar</button>
+          <button class="primary-button" type="button" id="occurrenceNextButton">Ir para salvar</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
