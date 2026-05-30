@@ -151,6 +151,7 @@ const occurrenceTypes = [
 
 const storageKeys = {
   draft: 'classlog-draft-v4',
+  locationPrefill: 'classlog-location-prefill-v1',
 };
 
 const pageMap = {
@@ -402,6 +403,14 @@ function clearDraft() {
   state.historyMode = 'selected';
 }
 
+function shouldAutoPrefillLocation() {
+  return localStorage.getItem(storageKeys.locationPrefill) === 'true';
+}
+
+function markAutoPrefillLocationEnabled() {
+  localStorage.setItem(storageKeys.locationPrefill, 'true');
+}
+
 function getPageNextRedirect() {
   const params = new URLSearchParams(window.location.search);
   return params.get('next') || pageMap.students;
@@ -522,8 +531,8 @@ function updateHeader() {
   const pageTitles = {
     login: ['Acesso seguro', 'Entrar no ClassLog', 'Use seu usuário e senha para acessar o sistema centralizado.'],
     students: ['Etapa 1', 'Selecionar alunos', 'Escolha um ou mais alunos para iniciar a ocorrência.'],
-    occurrence: ['Etapa 2', 'Escolher ocorrência', 'Selecione o tipo da ocorrência e avance.'],
-    finalize: ['Etapa 3', 'Encerrar e salvar', 'Revise data, localização, foto e observação antes de salvar.'],
+    occurrence: ['Etapa 2', 'Escolher ocorrência', 'Selecione o tipo da ocorrência e salve para complementar os dados.'],
+    finalize: ['Etapa 3', 'Complementar informações', 'Revise data, localização, foto e observação antes de salvar.'],
     history: ['Histórico', 'Ocorrências salvas', 'Veja registros recentes e filtre por alunos selecionados.'],
   };
 
@@ -703,6 +712,43 @@ function renderLocation() {
 
   elements.locationStatus.textContent = 'Capturada';
   elements.locationDetail.textContent = formatLocation(state.location);
+}
+
+async function autoPrefillFinalizeContext() {
+  if (state.page !== 'occurrence' || !state.selectedStudents.length) {
+    return;
+  }
+
+  if (!state.dateTime) {
+    state.dateTime = getCurrentDateTimeLocal();
+  }
+
+  if (state.location) {
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    return;
+  }
+
+  const canTryCapture = shouldAutoPrefillLocation();
+
+  if (navigator.permissions?.query) {
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state === 'granted') {
+        markAutoPrefillLocationEnabled();
+        await captureLocation({ silent: true, updateButton: false });
+        return;
+      }
+    } catch {
+      // Fall through to the persisted preference below.
+    }
+  }
+
+  if (canTryCapture) {
+    await captureLocation({ silent: true, updateButton: false });
+  }
 }
 
 function getFilteredReports() {
@@ -1117,7 +1163,7 @@ function updatePageState() {
   if (elements.saveButton) elements.saveButton.disabled = !canSave;
   if (elements.occurrenceHint) {
     elements.occurrenceHint.textContent = hasStudents
-      ? 'Escolha a ocorrência e avance para salvar.'
+      ? 'Salve esta etapa para abrir os campos de complementação.'
       : 'Selecione um ou mais alunos para liberar esta etapa.';
   }
 
@@ -1148,39 +1194,47 @@ function renderAll() {
   renderPageSpecificFields();
 }
 
-function captureLocation() {
+async function captureLocation(options = {}) {
+  const { silent = false, updateButton = true } = options;
   if (!navigator.geolocation) {
-    alert('Este navegador não oferece suporte à localização.');
+    if (!silent) alert('Este navegador não oferece suporte à localização.');
     return;
   }
 
-  if (elements.captureLocationButton) {
+  if (updateButton && elements.captureLocationButton) {
     elements.captureLocationButton.disabled = true;
     elements.captureLocationButton.textContent = 'Capturando...';
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      state.location = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
-        capturedAt: new Date().toISOString(),
-      };
-      saveDraft();
-      renderLocation();
-      updatePageState();
-      if (elements.captureLocationButton) elements.captureLocationButton.textContent = 'Capturar local';
-    },
-    () => {
-      alert('Não foi possível capturar a localização. Verifique a permissão do navegador.');
-      if (elements.captureLocationButton) {
-        elements.captureLocationButton.disabled = !state.selectedStudents.length;
-        elements.captureLocationButton.textContent = 'Capturar local';
-      }
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-  );
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        state.location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          capturedAt: new Date().toISOString(),
+        };
+        markAutoPrefillLocationEnabled();
+        saveDraft();
+        renderLocation();
+        updatePageState();
+        if (updateButton && elements.captureLocationButton) elements.captureLocationButton.textContent = 'Capturar local';
+        resolve(true);
+      },
+      () => {
+        if (!silent) {
+          alert('Não foi possível capturar a localização. Verifique a permissão do navegador.');
+        }
+        if (updateButton && elements.captureLocationButton) {
+          elements.captureLocationButton.disabled = !state.selectedStudents.length;
+          elements.captureLocationButton.textContent = 'Capturar local';
+        }
+        resolve(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+  });
 }
 
 function handlePhotoChange(event) {
@@ -1243,6 +1297,27 @@ async function saveReport() {
   }
 }
 
+async function saveOccurrenceStep() {
+  if (!state.selectedStudents.length) {
+    alert('Selecione um ou mais alunos antes de salvar.');
+    return;
+  }
+
+  const occurrenceLabel = normalizeOccurrenceLabel();
+  if (!occurrenceLabel) {
+    alert('Escolha ou escreva o tipo de ocorrência.');
+    return;
+  }
+
+  if (!state.dateTime) {
+    state.dateTime = getCurrentDateTimeLocal();
+  }
+
+  await autoPrefillFinalizeContext();
+  saveDraft();
+  navigate('finalize');
+}
+
 function exportReports() {
   const blob = new Blob([JSON.stringify(state.reports, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1292,7 +1367,7 @@ function bindEvents() {
   }
 
   if (elements.occurrenceNextButton) {
-    elements.occurrenceNextButton.addEventListener('click', () => navigate('finalize'));
+    elements.occurrenceNextButton.addEventListener('click', saveOccurrenceStep);
   }
 
   if (elements.dateTime) {
@@ -1463,6 +1538,11 @@ async function initPage() {
   bindEvents();
   renderAll();
   updatePageState();
+
+  if (state.page === 'occurrence') {
+    await autoPrefillFinalizeContext();
+    renderAll();
+  }
 }
 
 initPage();
