@@ -15,6 +15,10 @@
           <h1 id="pageTitle">Selecionar alunos</h1>
           <p class="hero-copy" id="pageDescription">Escolha um ou mais alunos para iniciar a ocorrência.</p>
         </div>
+        <div class="hero-actions">
+          <span class="session-label" id="authUserLabel"></span>
+          <button class="ghost-button" type="button" id="logoutButton">Sair</button>
+        </div>
         <div class="hero-stats">
           <article>
             <span id="todayCount">0</span>
@@ -45,6 +49,16 @@
             <h2>Seleção rápida</h2>
           </div>
           <button class="ghost-button" type="button" id="clearStudentButton">Limpar</button>
+        </div>
+        <div class="panel-subsection class-section">
+          <div class="panel-head class-section-head">
+            <div>
+              <p class="eyebrow">Turma</p>
+              <h2>Escolha o ano</h2>
+            </div>
+            <p class="hint class-hint" id="classHint">Selecione uma turma para começar.</p>
+          </div>
+          <div class="chips class-tabs" id="classTabs" aria-live="polite"></div>
         </div>
         <label class="field">
           <span>Buscar nome</span>

@@ -1,3 +1,33 @@
+.class-section {
+  margin-top: 10px;
+}
+
+.class-section-head {
+  margin-bottom: 12px;
+}
+
+.class-hint {
+  max-width: 34ch;
+  margin-top: 8px;
+  text-align: right;
+}
+
+.class-tabs .class-tab {
+  min-width: 132px;
+  padding: 12px 16px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.class-tabs .class-tab small {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.78;
+}
 :root {
   color-scheme: light;
   --bg: #f2eee7;
@@ -37,6 +67,10 @@ textarea {
   font: inherit;
 }
 
+select {
+  font: inherit;
+}
+
 button {
   border: 0;
   cursor: pointer;
@@ -60,14 +94,29 @@ textarea {
   outline: none;
 }
 
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text);
+  padding: 0.95rem 1rem;
+  outline: none;
+}
+
 input:focus,
 textarea:focus {
   border-color: rgba(14, 106, 92, 0.55);
   box-shadow: 0 0 0 4px rgba(14, 106, 92, 0.12);
 }
 
+select:focus {
+  border-color: rgba(14, 106, 92, 0.55);
+  box-shadow: 0 0 0 4px rgba(14, 106, 92, 0.12);
+}
+
 .app-shell {
-  width: min(100%, 920px);
+  width: min(100%, 1120px);
   margin: 0 auto;
   padding: 18px;
 }
@@ -85,6 +134,25 @@ textarea:focus {
   padding: 24px;
   display: grid;
   gap: 18px;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.session-label {
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(14, 106, 92, 0.08);
+  color: var(--accent-dark);
+  font-weight: 700;
 }
 
 .eyebrow {
@@ -142,8 +210,10 @@ h1 {
 }
 
 .hero-stats article:last-child span {
-  font-size: clamp(1rem, 2.6vw, 1.3rem);
-  white-space: nowrap;
+  font-size: clamp(0.92rem, 2.3vw, 1.15rem);
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .hero-stats small {
@@ -181,6 +251,40 @@ h1 {
   margin-top: 16px;
   border-radius: var(--radius-lg);
   padding: 20px;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  align-content: center;
+}
+
+.auth-panel {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.auth-hero {
+  align-items: center;
+}
+
+.auth-note,
+.card-note {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(14, 106, 92, 0.08);
+  border: 1px solid rgba(14, 106, 92, 0.16);
+}
+
+.auth-note p,
+.card-note p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
 }
 
 .step-panel {
@@ -261,6 +365,14 @@ h1 {
   color: var(--accent-dark);
   border: 1px solid rgba(14, 106, 92, 0.18);
   font-weight: 700;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.selected-pill small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .selected-pill span {
@@ -402,6 +514,128 @@ input[type='file'] {
   border: 1px solid var(--line);
 }
 
+.record-card.is-deleted {
+  background: rgba(255, 245, 244, 0.96);
+  border-color: rgba(164, 66, 56, 0.2);
+}
+
+.record-topline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.record-badges,
+.record-actions,
+.record-comments,
+.record-audit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.record-status,
+.record-timeline,
+.record-comments-preview span,
+.record-audit span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.record-status {
+  background: rgba(14, 106, 92, 0.12);
+  color: var(--accent-dark);
+}
+
+.record-timeline {
+  background: rgba(23, 51, 73, 0.08);
+  color: var(--muted);
+}
+
+.record-comments-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.record-comments-preview span,
+.record-audit span {
+  background: rgba(23, 51, 73, 0.06);
+  color: var(--text);
+}
+
+.record-comment {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(248, 243, 234, 0.95);
+  border: 1px solid rgba(23, 51, 73, 0.08);
+}
+
+.record-comment strong,
+.record-comment small,
+.record-audit small {
+  display: block;
+}
+
+.record-comment p,
+.record-audit p {
+  margin-bottom: 0;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 31, 45, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 920px);
+  max-height: min(92vh, 1000px);
+  overflow: auto;
+  border-radius: 26px;
+  background: var(--surface);
+  border: 1px solid rgba(23, 51, 73, 0.1);
+  box-shadow: 0 32px 80px rgba(14, 31, 45, 0.32);
+  padding: 20px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.modal-card .panel-subsection {
+  margin-top: 18px;
+}
+
+.auth-shell .hero-card {
+  grid-template-columns: 1fr;
+}
+
 .record-main {
   align-items: baseline;
 }
@@ -461,6 +695,20 @@ input[type='file'] {
   font-size: 0.86rem;
 }
 
+.record-card.is-deleted .record-meta span {
+  background: rgba(164, 66, 56, 0.08);
+  color: var(--danger);
+}
+
+.record-deletion-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(164, 66, 56, 0.08);
+  color: var(--danger);
+  border: 1px solid rgba(164, 66, 56, 0.16);
+}
+
 .record-photo-wrap {
   margin-top: 12px;
 }
@@ -484,5 +732,36 @@ input[type='file'] {
 
   .grid-two {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 980px) {
+  .auth-shell {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 18px;
+  }
+
+  .auth-shell .hero-card {
+    grid-column: 1 / -1;
+    grid-template-columns: 1.15fr 0.85fr;
+  }
+
+  .auth-panel {
+    grid-column: 1 / -1;
+  }
+
+  .modal-card {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 759px) {
+  .hero-actions {
+    justify-content: flex-start;
+  }
+
+  .modal-card {
+    max-height: 96vh;
+    padding: 18px;
   }
 }

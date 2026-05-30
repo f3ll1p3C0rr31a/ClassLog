@@ -15,6 +15,10 @@
           <h1 id="pageTitle">Encerrar e salvar</h1>
           <p class="hero-copy" id="pageDescription">Revise data, localização, foto e observação antes de salvar.</p>
         </div>
+        <div class="hero-actions">
+          <span class="session-label" id="authUserLabel"></span>
+          <button class="ghost-button" type="button" id="logoutButton">Sair</button>
+        </div>
         <div class="hero-stats">
           <article>
             <span id="todayCount">0</span>
@@ -52,7 +56,7 @@
       <section class="panel" id="finalizePanel">
         <div class="grid-two">
           <label class="field">
-            <span>Data e hora</span>
+            <span>Data da ocorrência</span>
             <input id="dateTime" type="datetime-local" />
           </label>
           <div class="location-box">

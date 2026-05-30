@@ -1,0 +1,108 @@
+{
+  "users": [
+    {
+      "id": "b1c1b1a5-8fd4-4c63-a7e2-46de6e3d2d49",
+      "username": "fellipecorreia",
+      "displayName": "Fellipe Correia",
+      "role": "coordinator",
+      "salt": "fd6ab7dd5a41cd1f64444557985e869f",
+      "hash": "6480bdda5e7fd266bcd9b2bd62f0a4a8724f92643a6e1633d013415ed00e1c6bf6fc93725a62e0785af717672e245360fae2889958a11af69f59992c962e3aeb"
+    },
+    {
+      "id": "2cec456d-c970-4919-8847-36a6f150d009",
+      "username": "coordenacao",
+      "displayName": "Coordenação",
+      "role": "coordinator",
+      "salt": "ee58533bf2fd4e4abe818610e6a1bbb9",
+      "hash": "a9a2ab53f4ad7f5f7e1373a23d9449fd3f79b1246043f00746a182735d590611aa7399068a3911083e7c9f023dc7c780db32f6c6744a3ba6bcdefecacc989df0"
+    },
+    {
+      "id": "9156d07e-c255-4615-937c-061a47f03f97",
+      "username": "professor",
+      "displayName": "Professor",
+      "role": "teacher",
+      "salt": "451eb444684894b65be5d94ecd2dafae",
+      "hash": "af1238dc3efb7a32d5f537dc2845766fd428cc27fdede8741ad7363b102aec51b1563630f47b9ccd22594b618011a7a0c95e57e5195fb7f0d9211936e8764533"
+    }
+  ],
+  "reports": [
+    {
+      "id": "eec68c08-de6d-4b83-86d5-9be81ad40e34",
+      "schoolId": null,
+      "createdBy": "coordenacao",
+      "createdByName": "Coordenação",
+      "updatedBy": "coordenacao",
+      "updatedByName": "Coordenação",
+      "createdAt": "2026-05-30T17:29:23.393Z",
+      "updatedAt": "2026-05-30T17:29:23.393Z",
+      "occurredAt": "2026-05-30T14:29",
+      "formalTime": "30/05/2026, 14:29",
+      "selectedStudents": [
+        {
+          "fullName": "BRYAN MARQUES MARTINS",
+          "displayName": "Bryan"
+        }
+      ],
+      "occurrenceLabel": "Não copiou",
+      "notes": "teste",
+      "location": null,
+      "photoDataUrl": "",
+      "status": "aberta",
+      "comments": [],
+      "auditTrail": []
+    },
+    {
+      "id": "5def1c9d-3d40-4cdf-9742-271377d1c690",
+      "schoolId": null,
+      "createdBy": "coordenacao",
+      "createdByName": "Coordenação",
+      "updatedBy": "coordenacao",
+      "updatedByName": "Coordenação",
+      "createdAt": "2026-05-30T17:28:46.021Z",
+      "updatedAt": "2026-05-30T17:49:30.059Z",
+      "occurredAt": "2026-05-30T14:28",
+      "formalTime": "30/05/2026, 14:28",
+      "selectedStudents": [
+        {
+          "fullName": "GABRIELA REDONDO DO OURO",
+          "displayName": "Gabriela Ouro"
+        }
+      ],
+      "occurrenceLabel": "Não fez atividade",
+      "notes": "TEste1",
+      "location": null,
+      "photoDataUrl": "",
+      "status": "excluida",
+      "comments": [],
+      "auditTrail": [
+        {
+          "id": "ca66f9e4-4017-4c7d-a5e7-73153b222c3c",
+          "createdAt": "2026-05-30T17:49:30.059Z",
+          "createdBy": "coordenacao",
+          "createdByName": "Coordenação",
+          "changes": [
+            {
+              "field": "deletedAt",
+              "before": null,
+              "after": "2026-05-30T17:49:30.059Z"
+            },
+            {
+              "field": "deletedReason",
+              "before": null,
+              "after": "Registro duplicado"
+            },
+            {
+              "field": "status",
+              "before": "aberta",
+              "after": "excluida"
+            }
+          ]
+        }
+      ],
+      "deletedAt": "2026-05-30T17:49:30.059Z",
+      "deletedBy": "coordenacao",
+      "deletedByName": "Coordenação",
+      "deletedReason": "Registro duplicado"
+    }
+  ]
+}

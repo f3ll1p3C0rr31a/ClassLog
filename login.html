@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <title>ClassLog | Acesso</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="login">
+    <main class="app-shell auth-shell">
+      <section class="hero-card auth-hero">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Acesso seguro</p>
+          <h1 id="pageTitle">Entrar no ClassLog</h1>
+          <p class="hero-copy" id="pageDescription">Acesso centralizado com histórico no servidor, edição auditada e comentários de andamento.</p>
+        </div>
+        <div class="auth-note card-note">
+          <strong>Acesso protegido</strong>
+          <p>Use seu usuário e senha para entrar.</p>
+        </div>
+      </section>
+
+      <section class="panel auth-panel">
+        <form id="loginForm" class="auth-form">
+          <label class="field">
+            <span>Usuário</span>
+            <input id="loginUsername" type="text" autocomplete="username" placeholder="Digite seu usuário" />
+          </label>
+          <label class="field">
+            <span>Senha</span>
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Digite sua senha" />
+          </label>
+          <input id="loginNext" type="hidden" />
+          <p class="hint" id="loginHint">Entre para acessar o fluxo da escola.</p>
+          <div class="page-actions">
+            <button class="primary-button" type="submit" id="loginButton">Entrar</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
