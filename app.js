@@ -154,6 +154,9 @@ const storageKeys = {
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
+const appVersion = '1.0.0';
+const appStage = 'ALPHA';
+
 const pageMap = {
   login: 'login.html',
   students: 'index.html',
@@ -191,6 +194,7 @@ const elements = {
   title: $('pageTitle'),
   pageSubtitle: $('pageSubtitle'),
   pageDescription: $('pageDescription'),
+  versionBadge: $('versionBadge'),
   selectedSummary: $('selectedSummary'),
   classTabs: $('classTabs'),
   classHint: $('classHint'),
@@ -540,6 +544,7 @@ function updateHeader() {
   if (elements.pageSubtitle) elements.pageSubtitle.textContent = subtitle;
   if (elements.title) elements.title.textContent = title;
   if (elements.pageDescription) elements.pageDescription.textContent = description;
+  if (elements.versionBadge) elements.versionBadge.textContent = `v${appVersion} · ${appStage}`;
 }
 
 function updateStats() {

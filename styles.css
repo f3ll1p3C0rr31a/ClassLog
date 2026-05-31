@@ -144,6 +144,10 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.hero-actions .version-badge {
+  margin-right: auto;
+}
+
 .session-label {
   min-height: 48px;
   padding: 0 14px;
@@ -153,6 +157,23 @@ select:focus {
   background: rgba(14, 106, 92, 0.08);
   color: var(--accent-dark);
   font-weight: 700;
+}
+
+.version-badge {
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 51, 73, 0.06);
+  border: 1px solid rgba(23, 51, 73, 0.1);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .eyebrow {

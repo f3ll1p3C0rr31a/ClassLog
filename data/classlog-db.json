@@ -27,14 +27,43 @@
   ],
   "reports": [
     {
+      "id": "36f8fbd3-6741-4ece-bd82-d9ec100ef70e",
+      "schoolId": null,
+      "createdBy": "fellipecorreia",
+      "createdByName": "Fellipe Correia",
+      "updatedBy": "fellipecorreia",
+      "updatedByName": "Fellipe Correia",
+      "createdAt": "2026-05-30T18:25:04.330Z",
+      "updatedAt": "2026-05-30T18:25:04.330Z",
+      "occurredAt": "2026-05-30T15:00",
+      "formalTime": "30/05/2026, 15:00",
+      "selectedStudents": [
+        {
+          "fullName": "GABRIELA REDONDO DO OURO",
+          "displayName": "Gabriela Ouro"
+        }
+      ],
+      "occurrenceLabel": "Uso indevido do celular",
+      "notes": "",
+      "location": null,
+      "photoDataUrl": "",
+      "status": "aberta",
+      "deletedAt": null,
+      "deletedBy": null,
+      "deletedByName": null,
+      "deletedReason": "",
+      "comments": [],
+      "auditTrail": []
+    },
+    {
       "id": "eec68c08-de6d-4b83-86d5-9be81ad40e34",
       "schoolId": null,
       "createdBy": "coordenacao",
       "createdByName": "Coordenação",
-      "updatedBy": "coordenacao",
-      "updatedByName": "Coordenação",
+      "updatedBy": "fellipecorreia",
+      "updatedByName": "Fellipe Correia",
       "createdAt": "2026-05-30T17:29:23.393Z",
-      "updatedAt": "2026-05-30T17:29:23.393Z",
+      "updatedAt": "2026-05-31T20:48:26.758Z",
       "occurredAt": "2026-05-30T14:29",
       "formalTime": "30/05/2026, 14:29",
       "selectedStudents": [
@@ -47,9 +76,37 @@
       "notes": "teste",
       "location": null,
       "photoDataUrl": "",
-      "status": "aberta",
+      "status": "excluida",
       "comments": [],
-      "auditTrail": []
+      "auditTrail": [
+        {
+          "id": "365e5345-a8a7-4a0f-a041-027d64f4c6e7",
+          "createdAt": "2026-05-31T20:48:26.758Z",
+          "createdBy": "fellipecorreia",
+          "createdByName": "Fellipe Correia",
+          "changes": [
+            {
+              "field": "deletedAt",
+              "before": null,
+              "after": "2026-05-31T20:48:26.758Z"
+            },
+            {
+              "field": "deletedReason",
+              "before": null,
+              "after": "Teste"
+            },
+            {
+              "field": "status",
+              "before": "aberta",
+              "after": "excluida"
+            }
+          ]
+        }
+      ],
+      "deletedAt": "2026-05-31T20:48:26.758Z",
+      "deletedBy": "fellipecorreia",
+      "deletedByName": "Fellipe Correia",
+      "deletedReason": "Teste"
     },
     {
       "id": "5def1c9d-3d40-4cdf-9742-271377d1c690",
