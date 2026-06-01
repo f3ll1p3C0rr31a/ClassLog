@@ -514,7 +514,7 @@ function loadImageElement(source) {
   });
 }
 
-async function compressImageFile(file, maxWidth = 1600, quality = 0.8) {
+async function compressImageFile(file, maxWidth = 1280, quality = 0.72) {
   const originalDataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
@@ -535,8 +535,7 @@ async function compressImageFile(file, maxWidth = 1600, quality = 0.8) {
     }
 
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-    return canvas.toDataURL(outputType, quality);
+    return canvas.toDataURL('image/jpeg', quality);
   } catch {
     return originalDataUrl;
   }
