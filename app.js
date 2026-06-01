@@ -505,6 +505,43 @@ function getCurrentDateTimeLocal() {
   return new Date(now.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = source;
+  });
+}
+
+async function compressImageFile(file, maxWidth = 1600, quality = 0.8) {
+  const originalDataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const image = await loadImageElement(originalDataUrl);
+    const scale = Math.min(1, maxWidth / Math.max(image.width || 1, image.height || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.width || 1) * scale));
+    canvas.height = Math.max(1, Math.round((image.height || 1) * scale));
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return originalDataUrl;
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    return canvas.toDataURL(outputType, quality);
+  } catch {
+    return originalDataUrl;
+  }
+}
+
 function getSelectedStudents() {
   return state.selectedStudents.map((fullName) => studentByName.get(fullName)).filter(Boolean);
 }
@@ -1249,13 +1286,11 @@ function handlePhotoChange(event) {
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    state.photoDataUrl = String(reader.result || '');
+  compressImageFile(file).then((compressedDataUrl) => {
+    state.photoDataUrl = compressedDataUrl;
     saveDraft();
     renderPhotoPreview();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function normalizeOccurrenceLabel() {
@@ -1297,7 +1332,12 @@ async function saveReport() {
     saveDraft();
     await loadReports();
     navigate('history');
-  } catch {
+  } catch (error) {
+    if (error?.status === 413) {
+      alert('A imagem ficou grande demais para enviar. Tente uma foto menor ou mais próxima do assunto.');
+      return;
+    }
+
     alert('Não foi possível salvar a ocorrência no servidor.');
   }
 }

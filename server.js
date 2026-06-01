@@ -5,7 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+const DATA_DIR = process.env.CLASSLOG_DATA_DIR || path.join(ROOT, 'data');
 const DB_FILE = path.join(DATA_DIR, 'classlog-db.json');
 const PORT = Number(process.env.PORT || 3000);
 const SESSION_COOKIE = 'classlog_session';
@@ -173,7 +173,7 @@ function getRequestUrl(req) {
   return new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 }
 
-async function readJsonBody(req, maxSize = 20 * 1024 * 1024) {
+async function readJsonBody(req, maxSize = 40 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
