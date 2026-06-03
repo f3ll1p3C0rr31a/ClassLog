@@ -177,8 +177,8 @@ const storageKeys = {
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
-const appVersion = '1.5.0';
-const appStage = 'BETA';
+const appVersion = '1.0.1';
+const appStage = 'ALPHA';
 
 const pageMap = {
   login: 'login.html',

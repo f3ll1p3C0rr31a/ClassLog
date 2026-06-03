@@ -20,14 +20,9 @@ jobs:
           username: ${{ secrets.CLASSLOG_DEPLOY_USER }}
           key: ${{ secrets.CLASSLOG_DEPLOY_KEY }}
           port: ${{ secrets.CLASSLOG_DEPLOY_PORT }}
-          source: "package.json,server.js,app.js,styles.css,index.html,occurrence.html,finalize.html,history.html,login.html,README.md"
+          source: "package.json,server.js,app.js,styles.css,index.html,occurrence.html,finalize.html,history.html,login.html,settings.html,manifest.webmanifest,service-worker.js,capacitor.config.json,README.md"
           target: ${{ secrets.CLASSLOG_DEPLOY_PATH }}
           overwrite: true
-          exclude: |
-            .git
-            .github
-            data
-            node_modules
 
       - name: Restart ClassLog container
         uses: appleboy/ssh-action@v1.0.3
