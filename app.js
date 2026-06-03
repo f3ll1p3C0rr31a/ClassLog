@@ -648,6 +648,41 @@ function canDeleteReport(report) {
   return Boolean(state.authUser && state.authUser.role === 'coordinator' && !report.deletedAt);
 }
 
+function loadImageElement(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = source;
+  });
+}
+
+async function compressImageFile(file, maxWidth = 1280, quality = 0.72) {
+  const originalDataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  try {
+    const image = await loadImageElement(originalDataUrl);
+    const scale = Math.min(1, maxWidth / Math.max(image.width || 1, image.height || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.width || 1) * scale));
+    canvas.height = Math.max(1, Math.round((image.height || 1) * scale));
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return originalDataUrl;
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch {
+    return originalDataUrl;
+  }
+}
 function getSelectedStudents() {
   const studentByName = getStudentMap();
   return state.selectedStudents.map((fullName) => studentByName.get(fullName)).filter(Boolean);
@@ -1371,13 +1406,11 @@ function handlePhotoChange(event) {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    state.photoDataUrl = String(reader.result || '');
+  compressImageFile(file).then((compressedDataUrl) => {
+    state.photoDataUrl = compressedDataUrl;
     saveDraft();
     renderPhotoPreview();
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 async function assignDisciplinaryMoment() {

@@ -1,0 +1,42 @@
+name: Deploy ClassLog
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.CLASSLOG_DEPLOY_HOST }}
+          username: ${{ secrets.CLASSLOG_DEPLOY_USER }}
+          key: ${{ secrets.CLASSLOG_DEPLOY_KEY }}
+          port: ${{ secrets.CLASSLOG_DEPLOY_PORT }}
+          source: "package.json,server.js,app.js,styles.css,index.html,occurrence.html,finalize.html,history.html,login.html,README.md"
+          target: ${{ secrets.CLASSLOG_DEPLOY_PATH }}
+          overwrite: true
+          exclude: |
+            .git
+            .github
+            data
+            node_modules
+
+      - name: Restart ClassLog container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CLASSLOG_DEPLOY_HOST }}
+          username: ${{ secrets.CLASSLOG_DEPLOY_USER }}
+          key: ${{ secrets.CLASSLOG_DEPLOY_KEY }}
+          port: ${{ secrets.CLASSLOG_DEPLOY_PORT }}
+          script: |
+            set -e
+            mkdir -p "${{ secrets.CLASSLOG_DEPLOY_PATH }}"
+            docker restart classlog-api
