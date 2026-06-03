@@ -22,12 +22,36 @@ const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
+
+const FATIMA_OCCURRENCES = [
+  'Atraso',
+  'Fora de sala',
+  'Não fez atividade',
+  'Não copiou',
+  'Sem material',
+  'Uso indevido do celular',
+  'Conversando durante a explicação',
+  'Outra',
+];
+
+const EC303_OCCURRENCES = [
+  'Agressão física',
+  'Agressão verbal',
+  'Não utilização do uniforme',
+  'Roupa inapropriada para a escola',
+  'Comportamento inadequado em sala de aula',
+  'Desrespeito com colegas',
+  'Desrespeito com equipe escolar',
+  'Saída da sala sem autorização',
+  'Outra',
+];
 
 let database = null;
 
@@ -74,6 +98,52 @@ function createDefaultOwner() {
   };
 }
 
+function createDefaultSettings() {
+  return {
+    schools: [
+      {
+        id: 'fatima',
+        name: 'Fátima',
+        educationType: 'particular',
+        palette: {
+          primary: '#0f4ea8',
+          secondary: '#ffd447',
+          accent: '#0b3a7d',
+          background: '#f4f8ff',
+        },
+        schedule: {
+          start: '07:15',
+          end: '12:30',
+        },
+        occurrenceTypes: [...FATIMA_OCCURRENCES],
+        policies: {
+          disciplinaryMomentEnabled: false,
+        },
+      },
+      {
+        id: 'ec303',
+        name: 'EC303',
+        educationType: 'publica',
+        palette: {
+          primary: '#1f7a36',
+          secondary: '#ffd447',
+          accent: '#0f5824',
+          background: '#ffffff',
+        },
+        schedule: {
+          start: '13:00',
+          end: '18:00',
+        },
+        occurrenceTypes: [...EC303_OCCURRENCES],
+        policies: {
+          disciplinaryMomentEnabled: true,
+        },
+      },
+    ],
+    holidays: [],
+  };
+}
+
 function formatDateTime(value) {
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -116,30 +186,243 @@ function parseCookies(cookieHeader) {
   }, {});
 }
 
+function parseTimeToMinutes(value) {
+  const [hh, mm] = String(value || '').split(':').map((part) => Number(part));
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) {
+    return null;
+  }
+  return (hh * 60) + mm;
+}
+
+function getCurrentMinutes() {
+  const now = new Date();
+  return (now.getHours() * 60) + now.getMinutes();
+}
+
+function detectActiveSchoolId(settings) {
+  const schools = Array.isArray(settings?.schools) ? settings.schools : [];
+  const currentMinutes = getCurrentMinutes();
+
+  for (const school of schools) {
+    const start = parseTimeToMinutes(school?.schedule?.start);
+    const end = parseTimeToMinutes(school?.schedule?.end);
+    if (start == null || end == null) {
+      continue;
+    }
+
+    if (currentMinutes >= start && currentMinutes <= end) {
+      return school.id;
+    }
+  }
+
+  return schools[0]?.id || null;
+}
+
+function toDateOnlyLocal(dateInput = new Date()) {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDateOnlyLocal(dateOnly) {
+  const [yyyy, mm, dd] = String(dateOnly || '').split('-').map((part) => Number(part));
+  if (!Number.isFinite(yyyy) || !Number.isFinite(mm) || !Number.isFinite(dd)) {
+    return null;
+  }
+
+  return new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+}
+
+function isBusinessDay(dateOnly, holidaysSet) {
+  const date = parseDateOnlyLocal(dateOnly);
+  if (!date) {
+    return false;
+  }
+
+  const weekday = date.getDay();
+  const weekend = weekday === 0 || weekday === 6;
+  return !weekend && !holidaysSet.has(dateOnly);
+}
+
+function getHolidaysSet() {
+  const holidays = Array.isArray(database?.settings?.holidays) ? database.settings.holidays : [];
+  return new Set(holidays.filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)));
+}
+
+function getNextBusinessDay(dateOnly, holidaysSet) {
+  let cursor = parseDateOnlyLocal(dateOnly);
+  if (!cursor) {
+    cursor = new Date();
+  }
+
+  while (true) {
+    const candidate = toDateOnlyLocal(cursor);
+    if (isBusinessDay(candidate, holidaysSet)) {
+      return candidate;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+}
+
+function addBusinessDaysInclusive(startDateOnly, days, holidaysSet) {
+  let remaining = Math.max(1, Number(days) || 1);
+  let cursor = parseDateOnlyLocal(startDateOnly) || new Date();
+
+  while (true) {
+    const candidate = toDateOnlyLocal(cursor);
+    if (isBusinessDay(candidate, holidaysSet)) {
+      remaining -= 1;
+      if (remaining === 0) {
+        return candidate;
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+}
+
+function addBusinessDaysAfter(baseDateOnly, days, holidaysSet) {
+  let cursor = parseDateOnlyLocal(baseDateOnly) || new Date();
+  cursor.setDate(cursor.getDate() + 1);
+  const nextStart = getNextBusinessDay(toDateOnlyLocal(cursor), holidaysSet);
+  return addBusinessDaysInclusive(nextStart, days, holidaysSet);
+}
+
+function countBusinessDaysInclusive(startDateOnly, endDateOnly, holidaysSet) {
+  const start = parseDateOnlyLocal(startDateOnly);
+  const end = parseDateOnlyLocal(endDateOnly);
+
+  if (!start || !end || start > end) {
+    return 0;
+  }
+
+  let count = 0;
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const candidate = toDateOnlyLocal(cursor);
+    if (isBusinessDay(candidate, holidaysSet)) {
+      count += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return count;
+}
+
+function normalizeSchool(entry, fallback) {
+  const defaultSchool = fallback || {};
+  return {
+    id: String(entry?.id || defaultSchool.id || '').trim(),
+    name: String(entry?.name || defaultSchool.name || '').trim(),
+    educationType: String(entry?.educationType || defaultSchool.educationType || 'particular').trim(),
+    palette: {
+      primary: String(entry?.palette?.primary || defaultSchool?.palette?.primary || '#0f4ea8').trim(),
+      secondary: String(entry?.palette?.secondary || defaultSchool?.palette?.secondary || '#ffd447').trim(),
+      accent: String(entry?.palette?.accent || defaultSchool?.palette?.accent || '#0b3a7d').trim(),
+      background: String(entry?.palette?.background || defaultSchool?.palette?.background || '#f4f8ff').trim(),
+    },
+    schedule: {
+      start: String(entry?.schedule?.start || defaultSchool?.schedule?.start || '07:00').trim(),
+      end: String(entry?.schedule?.end || defaultSchool?.schedule?.end || '12:00').trim(),
+    },
+    occurrenceTypes: Array.isArray(entry?.occurrenceTypes) && entry.occurrenceTypes.length > 0
+      ? entry.occurrenceTypes.map((value) => String(value || '').trim()).filter(Boolean)
+      : Array.isArray(defaultSchool?.occurrenceTypes) ? defaultSchool.occurrenceTypes : ['Outra'],
+    policies: {
+      disciplinaryMomentEnabled: Boolean(entry?.policies?.disciplinaryMomentEnabled ?? defaultSchool?.policies?.disciplinaryMomentEnabled),
+    },
+  };
+}
+
+function normalizeSettings(settingsInput) {
+  const defaults = createDefaultSettings();
+  const byDefaultId = new Map(defaults.schools.map((school) => [school.id, school]));
+
+  const inputSchools = Array.isArray(settingsInput?.schools) && settingsInput.schools.length > 0
+    ? settingsInput.schools
+    : defaults.schools;
+
+  const schools = inputSchools
+    .map((entry) => normalizeSchool(entry, byDefaultId.get(entry?.id) || defaults.schools[0]))
+    .filter((school) => school.id && school.name);
+
+  const holidays = Array.isArray(settingsInput?.holidays)
+    ? settingsInput.holidays.map((dateOnly) => String(dateOnly || '').trim()).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+    : [];
+
+  return {
+    schools: schools.length > 0 ? schools : defaults.schools,
+    holidays: [...new Set(holidays)].sort(),
+  };
+}
+
+function normalizeDisciplinaryActions(actions) {
+  if (!Array.isArray(actions)) {
+    return [];
+  }
+
+  return actions
+    .map((action) => ({
+      id: action.id || crypto.randomUUID(),
+      schoolId: String(action.schoolId || '').trim(),
+      studentFullName: String(action.studentFullName || '').trim(),
+      startDate: String(action.startDate || '').trim(),
+      endDate: String(action.endDate || '').trim(),
+      totalBusinessDays: Number(action.totalBusinessDays || 0),
+      status: action.status === 'completed' ? 'completed' : 'active',
+      createdAt: action.createdAt || nowIso(),
+      updatedAt: action.updatedAt || nowIso(),
+      createdBy: action.createdBy || null,
+      createdByName: action.createdByName || null,
+      history: Array.isArray(action.history)
+        ? action.history.map((entry) => ({
+          addedDays: Number(entry.addedDays || 0),
+          at: entry.at || nowIso(),
+          by: entry.by || null,
+          byName: entry.byName || null,
+          note: String(entry.note || '').trim(),
+        }))
+        : [],
+    }))
+    .filter((action) => action.schoolId && action.studentFullName && /^\d{4}-\d{2}-\d{2}$/.test(action.startDate) && /^\d{4}-\d{2}-\d{2}$/.test(action.endDate));
+}
+
 async function ensureDatabase() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
 
   try {
     const raw = await fsp.readFile(DB_FILE, 'utf8');
     const parsed = JSON.parse(raw);
+
     if (!Array.isArray(parsed.users) || parsed.users.length === 0) {
       parsed.users = [createDefaultUser()];
     }
+
     if (!parsed.users.some((entry) => entry.username === (process.env.CLASSLOG_TEACHER_USERNAME || 'professor'))) {
       parsed.users.push(createDefaultProfessor());
     }
+
     if (!parsed.users.some((entry) => entry.username === OWNER_USERNAME)) {
       parsed.users.push(createDefaultOwner());
     }
+
     if (!Array.isArray(parsed.reports)) {
       parsed.reports = [];
     }
+
+    parsed.settings = normalizeSettings(parsed.settings);
+    parsed.disciplinaryActions = normalizeDisciplinaryActions(parsed.disciplinaryActions);
+
     database = parsed;
     await persistDatabase();
   } catch {
     database = {
-      users: [createDefaultUser()],
+      users: [createDefaultUser(), createDefaultProfessor(), createDefaultOwner()],
       reports: [],
+      settings: createDefaultSettings(),
+      disciplinaryActions: [],
     };
     await persistDatabase();
   }
@@ -393,7 +676,7 @@ async function createReport(req, res, body, user) {
   const timestamp = nowIso();
   const report = sanitizeReport({
     id: crypto.randomUUID(),
-    schoolId: body.schoolId || null,
+    schoolId: body.schoolId || detectActiveSchoolId(database.settings),
     createdBy: user.username,
     createdByName: user.displayName,
     updatedBy: user.username,
@@ -437,6 +720,7 @@ async function updateReport(req, res, body, user, reportId) {
 
   const nextReport = {
     ...report,
+    schoolId: body.schoolId || report.schoolId || detectActiveSchoolId(database.settings),
     selectedStudents: normalizeStudents(body.selectedStudents ?? report.selectedStudents),
     occurrenceLabel: String(body.occurrenceLabel ?? report.occurrenceLabel).trim(),
     notes: String(body.notes ?? report.notes).trim(),
@@ -553,6 +837,123 @@ async function addComment(req, res, body, user, reportId) {
   sendJson(res, 201, { comment });
 }
 
+function sanitizeDisciplinaryAction(action) {
+  const holidaysSet = getHolidaysSet();
+  const today = toDateOnlyLocal();
+  const remainingBusinessDays = action.status === 'completed'
+    ? 0
+    : countBusinessDaysInclusive(today, action.endDate, holidaysSet);
+
+  return {
+    ...action,
+    remainingBusinessDays,
+  };
+}
+
+async function listDisciplinaryActions(req, res, schoolId) {
+  const today = toDateOnlyLocal();
+  let changed = false;
+
+  for (const action of database.disciplinaryActions) {
+    if (action.status === 'active' && parseDateOnlyLocal(action.endDate) < parseDateOnlyLocal(today)) {
+      action.status = 'completed';
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await persistDatabase();
+  }
+
+  const filtered = database.disciplinaryActions
+    .filter((action) => !schoolId || action.schoolId === schoolId)
+    .map((action) => sanitizeDisciplinaryAction(action))
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+  sendJson(res, 200, { actions: filtered });
+}
+
+async function saveDisciplinaryAction(req, res, body, user) {
+  const schoolId = String(body.schoolId || detectActiveSchoolId(database.settings) || '').trim();
+  const studentFullName = String(body.studentFullName || '').trim();
+  const daysToAdd = Math.max(1, Number(body.days) || 1);
+  const note = String(body.note || '').trim();
+
+  if (!schoolId) {
+    sendJson(res, 400, { error: 'missing_school' });
+    return;
+  }
+
+  if (!studentFullName) {
+    sendJson(res, 400, { error: 'missing_student' });
+    return;
+  }
+
+  const school = database.settings.schools.find((entry) => entry.id === schoolId);
+  if (!school) {
+    sendJson(res, 404, { error: 'school_not_found' });
+    return;
+  }
+
+  if (!school.policies?.disciplinaryMomentEnabled) {
+    sendJson(res, 409, { error: 'disciplinary_moment_disabled' });
+    return;
+  }
+
+  const holidaysSet = getHolidaysSet();
+  const today = toDateOnlyLocal();
+  const active = database.disciplinaryActions.find(
+    (entry) => entry.schoolId === schoolId && entry.studentFullName === studentFullName && entry.status === 'active',
+  );
+
+  if (active) {
+    const baseDate = parseDateOnlyLocal(active.endDate) >= parseDateOnlyLocal(today) ? active.endDate : today;
+    active.endDate = addBusinessDaysAfter(baseDate, daysToAdd, holidaysSet);
+    active.totalBusinessDays += daysToAdd;
+    active.updatedAt = nowIso();
+    active.history.unshift({
+      addedDays: daysToAdd,
+      at: active.updatedAt,
+      by: user.username,
+      byName: user.displayName,
+      note,
+    });
+
+    await persistDatabase();
+    sendJson(res, 200, { action: sanitizeDisciplinaryAction(active) });
+    return;
+  }
+
+  const startDate = getNextBusinessDay(today, holidaysSet);
+  const endDate = addBusinessDaysInclusive(startDate, daysToAdd, holidaysSet);
+  const action = {
+    id: crypto.randomUUID(),
+    schoolId,
+    studentFullName,
+    startDate,
+    endDate,
+    totalBusinessDays: daysToAdd,
+    status: 'active',
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    createdBy: user.username,
+    createdByName: user.displayName,
+    history: [
+      {
+        addedDays: daysToAdd,
+        at: nowIso(),
+        by: user.username,
+        byName: user.displayName,
+        note,
+      },
+    ],
+  };
+
+  database.disciplinaryActions.unshift(action);
+  await persistDatabase();
+  sendJson(res, 201, { action: sanitizeDisciplinaryAction(action) });
+}
+
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/auth/me' && req.method === 'GET') {
     const user = getUserFromRequest(req);
@@ -573,6 +974,48 @@ async function handleApi(req, res, url) {
 
   const user = requireAuth(req, res);
   if (!user) {
+    return;
+  }
+
+  if (url.pathname === '/api/context' && req.method === 'GET') {
+    const settings = normalizeSettings(database.settings);
+    database.settings = settings;
+    const activeSchoolId = detectActiveSchoolId(settings);
+    sendJson(res, 200, {
+      user,
+      settings,
+      activeSchoolId,
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/settings' && req.method === 'GET') {
+    sendJson(res, 200, { settings: normalizeSettings(database.settings) });
+    return;
+  }
+
+  if (url.pathname === '/api/settings' && req.method === 'PUT') {
+    if (user.role !== 'coordinator') {
+      sendJson(res, 403, { error: 'settings_forbidden' });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    database.settings = normalizeSettings(body.settings || body);
+    await persistDatabase();
+    sendJson(res, 200, { settings: database.settings });
+    return;
+  }
+
+  if (url.pathname === '/api/disciplinary-actions' && req.method === 'GET') {
+    const schoolId = String(url.searchParams.get('schoolId') || '').trim();
+    await listDisciplinaryActions(req, res, schoolId);
+    return;
+  }
+
+  if (url.pathname === '/api/disciplinary-actions' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    await saveDisciplinaryAction(req, res, body, user);
     return;
   }
 

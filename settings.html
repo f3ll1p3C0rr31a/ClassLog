@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>ClassLog | Configuração</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="settings">
+    <main class="app-shell">
+      <section class="hero-card">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Configurações</p>
+          <h1 id="pageTitle">Gestão de escolas</h1>
+          <p class="hero-copy" id="pageDescription">Ajuste horários, cores, ocorrências e feriados por escola.</p>
+        </div>
+        <div class="hero-actions">
+          <span class="version-badge" id="versionBadge">v1.5.0 · BETA</span>
+          <span class="session-label school-badge" id="schoolBadge"></span>
+          <label class="school-picker" for="schoolSelect">
+            <span>Escola</span>
+            <select id="schoolSelect"></select>
+          </label>
+          <span class="session-label" id="schoolSchedule"></span>
+          <span class="session-label" id="authUserLabel"></span>
+          <button class="ghost-button" type="button" id="logoutButton">Sair</button>
+        </div>
+      </section>
+
+      <nav class="step-nav">
+        <a class="step-link" href="index.html">Alunos</a>
+        <a class="step-link" href="occurrence.html">Ocorrência</a>
+        <a class="step-link" href="finalize.html">Salvar</a>
+        <a class="step-link" href="history.html">Histórico</a>
+        <a class="step-link active" href="settings.html">Configuração</a>
+      </nav>
+
+      <section class="panel" id="settingsPanel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h2>Configuração por escola</h2>
+          </div>
+        </div>
+
+        <div class="grid-two">
+          <label class="field">
+            <span>Escola para editar</span>
+            <select id="settingsSchoolSelect"></select>
+          </label>
+          <div class="grid-two compact-grid">
+            <label class="field">
+              <span>Início do turno</span>
+              <input id="settingsStart" type="time" />
+            </label>
+            <label class="field">
+              <span>Fim do turno</span>
+              <input id="settingsEnd" type="time" />
+            </label>
+          </div>
+        </div>
+
+        <div class="grid-two compact-grid">
+          <label class="field">
+            <span>Cor principal</span>
+            <input id="settingsPrimary" type="color" />
+          </label>
+          <label class="field">
+            <span>Cor secundária</span>
+            <input id="settingsSecondary" type="color" />
+          </label>
+          <label class="field">
+            <span>Cor de destaque</span>
+            <input id="settingsAccent" type="color" />
+          </label>
+          <label class="field">
+            <span>Fundo base</span>
+            <input id="settingsBackground" type="color" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Ocorrências (uma por linha)</span>
+          <textarea id="settingsOccurrenceList" rows="8" placeholder="Agressão física"></textarea>
+        </label>
+
+        <label class="field checkbox-row">
+          <input id="settingsDisciplinaryToggle" type="checkbox" />
+          <span>Habilitar momento disciplinar nesta escola</span>
+        </label>
+
+        <label class="field">
+          <span>Feriados (AAAA-MM-DD, um por linha)</span>
+          <textarea id="settingsHolidays" rows="6" placeholder="2026-09-07"></textarea>
+        </label>
+
+        <div class="page-actions split-actions">
+          <button class="primary-button" type="button" id="settingsSaveButton">Salvar configurações</button>
+        </div>
+        <p class="hint" id="settingsHint">Salve para aplicar a configuração no sistema inteiro.</p>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

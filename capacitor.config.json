@@ -1,0 +1,10 @@
+{
+  "appId": "com.classlog.app",
+  "appName": "ClassLog",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "hostname": "localhost",
+    "androidScheme": "http"
+  }
+}

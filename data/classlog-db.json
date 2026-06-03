@@ -161,5 +161,98 @@
       "deletedByName": "Coordenação",
       "deletedReason": "Registro duplicado"
     }
+  ],
+  "settings": {
+    "schools": [
+      {
+        "id": "fatima",
+        "name": "Fátima",
+        "educationType": "particular",
+        "palette": {
+          "primary": "#0f4ea8",
+          "secondary": "#ffd447",
+          "accent": "#0b3a7d",
+          "background": "#f4f8ff"
+        },
+        "schedule": {
+          "start": "07:15",
+          "end": "12:30"
+        },
+        "occurrenceTypes": [
+          "Atraso",
+          "Fora de sala",
+          "Não fez atividade",
+          "Não copiou",
+          "Sem material",
+          "Uso indevido do celular",
+          "Conversando durante a explicação",
+          "Outra"
+        ],
+        "policies": {
+          "disciplinaryMomentEnabled": false
+        }
+      },
+      {
+        "id": "ec303",
+        "name": "EC303",
+        "educationType": "publica",
+        "palette": {
+          "primary": "#1f7a36",
+          "secondary": "#ffd447",
+          "accent": "#0f5824",
+          "background": "#ffffff"
+        },
+        "schedule": {
+          "start": "13:00",
+          "end": "18:00"
+        },
+        "occurrenceTypes": [
+          "Agressão física",
+          "Agressão verbal",
+          "Não utilização do uniforme",
+          "Roupa inapropriada para a escola",
+          "Comportamento inadequado em sala de aula",
+          "Desrespeito com colegas",
+          "Desrespeito com equipe escolar",
+          "Saída da sala sem autorização",
+          "Outra"
+        ],
+        "policies": {
+          "disciplinaryMomentEnabled": true
+        }
+      }
+    ],
+    "holidays": []
+  },
+  "disciplinaryActions": [
+    {
+      "id": "bead54ed-c0b3-490d-a236-40e2a7f00a8a",
+      "schoolId": "ec303",
+      "studentFullName": "ALICE TORRES SOARES",
+      "startDate": "2026-06-03",
+      "endDate": "2026-06-09",
+      "totalBusinessDays": 5,
+      "status": "active",
+      "createdAt": "2026-06-03T10:54:53.745Z",
+      "updatedAt": "2026-06-03T10:54:53.748Z",
+      "createdBy": "coordenacao",
+      "createdByName": "Coordenação",
+      "history": [
+        {
+          "addedDays": 2,
+          "at": "2026-06-03T10:54:53.748Z",
+          "by": "coordenacao",
+          "byName": "Coordenação",
+          "note": "Extensao"
+        },
+        {
+          "addedDays": 3,
+          "at": "2026-06-03T10:54:53.745Z",
+          "by": "coordenacao",
+          "byName": "Coordenação",
+          "note": "Teste"
+        }
+      ]
+    }
   ]
 }

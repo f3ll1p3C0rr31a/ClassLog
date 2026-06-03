@@ -1,6 +1,6 @@
 # ClassLog
 
-Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora com autenticação, histórico centralizado e auditoria de alterações.
+Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora com autenticação, histórico centralizado, auditoria de alterações e suporte multi-escola.
 
 ## O que faz
 - Seleção rápida de um ou mais alunos com busca.
@@ -10,6 +10,9 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 - Captura de localização pelo navegador.
 - Anexo de foto pela câmera ou galeria.
 - Histórico filtrado por aluno ou visão geral.
+- Troca automática de escola por horário.
+- Configuração por escola (cores, horário, ocorrências e políticas).
+- Registro de momento disciplinar por dias úteis com respeito a feriados.
 - Login por usuário e senha.
 - Edição do registro com data original preservada e trilha de auditoria.
 - Comentários e andamento para acompanhamento da coordenação.
@@ -20,6 +23,7 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 - `finalize.html`: data, localização, foto, observação e salvamento.
 - `history.html`: histórico.
 - `login.html`: acesso ao sistema.
+- `settings.html`: dashboard de configuração.
 
 ## Como usar
 1. Execute `npm start`.
@@ -30,6 +34,29 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 6. Capture a localização, se quiser registrar.
 7. Adicione foto e observações.
 8. Encerre e salve a ocorrência.
+
+## Multi-escola (configuração padrão)
+- `Fátima` (particular): 07:15 às 12:30.
+- `EC303` (pública): 13:00 às 18:00.
+- O sistema define automaticamente a escola ativa pelo horário atual.
+- Você pode alternar manualmente no seletor de escola quando necessário.
+
+## Momento disciplinar
+- Disponível por padrão na `EC303`.
+- O registro é feito em dias úteis, ignorando fins de semana e feriados cadastrados.
+- Se você adicionar mais dias para o mesmo aluno, a contagem é estendida em cima do prazo atual.
+- Alunos com prazo ativo aparecem destacados em vermelho na lista.
+
+## Preparação para Android e iOS
+1. Instale dependências: `npm install`.
+2. Sincronize o projeto web para Capacitor: `npm run mobile:sync`.
+3. Abrir Android Studio: `npm run mobile:android`.
+4. Abrir Xcode (macOS): `npm run mobile:ios`.
+
+Arquivos incluídos para mobile/PWA:
+- `capacitor.config.json`
+- `manifest.webmanifest`
+- `service-worker.js`
 
 ## Observações importantes
 - O histórico agora é salvo no servidor local em `data/classlog-db.json`.

@@ -37,6 +37,8 @@
   --line: rgba(23, 51, 73, 0.12);
   --accent: #0e6a5c;
   --accent-dark: #0b554a;
+  --school-secondary: #ffd447;
+  --school-bg-soft: #f4f8ff;
   --danger: #a44238;
   --shadow: 0 20px 50px rgba(23, 51, 73, 0.12);
   --radius-xl: 30px;
@@ -51,8 +53,8 @@
 html {
   font-family: "Segoe UI", "Trebuchet MS", sans-serif;
   background:
-    radial-gradient(circle at top, rgba(14, 106, 92, 0.14), transparent 30%),
-    linear-gradient(180deg, #fbf7f1 0%, #f1e8da 100%);
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 25%, transparent), transparent 30%),
+    linear-gradient(180deg, #fbf7f1 0%, var(--school-bg-soft) 100%);
 }
 
 body {
@@ -142,6 +144,28 @@ select:focus {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.school-picker {
+  display: grid;
+  gap: 4px;
+  min-width: 156px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.school-picker select {
+  min-height: 40px;
+  border-radius: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.school-badge {
+  background: color-mix(in srgb, var(--school-secondary) 35%, white);
+  color: var(--accent-dark);
 }
 
 .hero-actions .version-badge {
@@ -390,6 +414,13 @@ h1 {
   align-items: flex-start;
 }
 
+.selected-pill.disciplinary-alert,
+.chip.disciplinary-alert {
+  border-color: rgba(164, 66, 56, 0.44);
+  background: rgba(164, 66, 56, 0.12);
+  color: var(--danger);
+}
+
 .selected-pill small {
   font-size: 0.72rem;
   font-weight: 600;
@@ -571,8 +602,29 @@ input[type='file'] {
 }
 
 .record-status {
-  background: rgba(14, 106, 92, 0.12);
+  background: color-mix(in srgb, var(--accent) 18%, white);
   color: var(--accent-dark);
+}
+
+.disciplinary-badge {
+  background: rgba(164, 66, 56, 0.12);
+  color: var(--danger);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.compact-grid {
+  gap: 12px;
 }
 
 .record-timeline {
@@ -748,7 +800,7 @@ input[type='file'] {
   }
 
   .step-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .grid-two {
@@ -779,6 +831,10 @@ input[type='file'] {
 @media (max-width: 759px) {
   .hero-actions {
     justify-content: flex-start;
+  }
+
+  .school-picker {
+    width: 100%;
   }
 
   .modal-card {
