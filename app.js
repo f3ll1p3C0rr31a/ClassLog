@@ -140,8 +140,8 @@ const schoolClassGroups = {
   ],
   ec303: [
     {
-      key: '5ano',
-      label: '5 ano',
+      key: '5ano-d',
+      label: '5º Ano - D',
       students: [
         'ALICE TORRES SOARES',
         'ANA CAROLINA BARBOSA REZENDE',
@@ -173,11 +173,11 @@ const schoolClassGroups = {
 };
 
 const storageKeys = {
-  draft: 'classlog-draft-v5',
+  draft: 'classlog-draft-v6',
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
-const appVersion = '1.0.1';
+const appVersion = '1.1.1';
 const appStage = 'ALPHA';
 
 const pageMap = {
@@ -196,7 +196,8 @@ const state = {
   settings: { schools: [], holidays: [] },
   selectedClass: '',
   selectedStudents: [],
-  selectedOccurrence: '',
+  selectedOccurrences: [],
+  recordKind: 'occurrence',
   customOccurrence: '',
   notes: '',
   dateTime: '',
@@ -205,6 +206,13 @@ const state = {
   reports: [],
   disciplinaryActions: [],
   historyMode: 'selected',
+  historyFilters: {
+    student: '',
+    date: '',
+    occurrence: '',
+    classKey: '',
+    recordKind: '',
+  },
   authUser: null,
   activeReportId: null,
 };
@@ -237,6 +245,7 @@ const elements = {
   studentNextButton: $('studentNextButton'),
   occurrencePanel: $('occurrencePanel'),
   occurrenceChips: $('occurrenceChips'),
+  recordKindChips: $('recordKindChips'),
   otherOccurrenceField: $('otherOccurrenceField'),
   otherOccurrence: $('otherOccurrence'),
   occurrenceHint: $('occurrenceHint'),
@@ -257,6 +266,12 @@ const elements = {
   historySelectedButton: $('historySelectedButton'),
   historyAllButton: $('historyAllButton'),
   historyBackButton: $('historyBackButton'),
+  historyStudentFilter: $('historyStudentFilter'),
+  historyDateFilter: $('historyDateFilter'),
+  historyOccurrenceFilter: $('historyOccurrenceFilter'),
+  historyClassFilter: $('historyClassFilter'),
+  historyKindFilter: $('historyKindFilter'),
+  historyClearFilters: $('historyClearFilters'),
   records: $('records'),
   recordTemplate: $('recordTemplate'),
   recordModal: $('recordModal'),
@@ -325,7 +340,13 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
+    hourCycle: 'h23',
+    hour12: false,
   }).format(new Date(value));
+}
+
+function canManageSettings() {
+  return Boolean(state.authUser && ['coordinator', 'admin'].includes(state.authUser.role));
 }
 
 function getPageNextRedirect() {
@@ -397,7 +418,17 @@ function buildStudentRoster(groups) {
     return counts;
   }, {});
 
-  return groups.flatMap((group) => group.students.map((fullName) => {
+  return groups.flatMap((group) => {
+    const classTarget = {
+      fullName: `__CLASS__:${state.selectedSchoolId}:${group.key}`,
+      displayName: group.label,
+      firstName: group.label,
+      classKey: group.key,
+      classLabel: group.label,
+      targetType: 'class',
+    };
+
+    const students = group.students.map((fullName) => {
     const parts = fullName.split(/\s+/);
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
@@ -409,8 +440,12 @@ function buildStudentRoster(groups) {
       firstName: titleCase(firstName),
       classKey: group.key,
       classLabel: group.label,
+      targetType: 'student',
     };
-  }));
+    });
+
+    return [classTarget, ...students];
+  });
 }
 
 function getStudentRoster() {
@@ -439,12 +474,8 @@ function rebuildSchoolDependentState() {
   state.selectedStudents = state.selectedStudents.filter((fullName) => studentsByName.has(fullName));
 
   const occurrenceTypes = getOccurrenceTypes();
-  if (!occurrenceTypes.includes(state.selectedOccurrence)) {
-    state.selectedOccurrence = occurrenceTypes[0] || 'Outra';
-    if (state.selectedOccurrence !== 'Outra') {
-      state.customOccurrence = '';
-    }
-  }
+  state.selectedOccurrences = state.selectedOccurrences.filter((type) => occurrenceTypes.includes(type));
+  if (!state.selectedOccurrences.includes('Outra')) state.customOccurrence = '';
 }
 
 async function apiRequest(pathname, options = {}) {
@@ -525,13 +556,17 @@ function loadDraft() {
     state.manualSchoolSelection = Boolean(draft.manualSchoolSelection);
     state.selectedClass = draft.selectedClass || state.selectedClass;
     state.selectedStudents = Array.isArray(draft.selectedStudents) ? draft.selectedStudents : [];
-    state.selectedOccurrence = draft.selectedOccurrence || state.selectedOccurrence;
+    state.selectedOccurrences = Array.isArray(draft.selectedOccurrences)
+      ? draft.selectedOccurrences
+      : draft.selectedOccurrence ? [draft.selectedOccurrence] : [];
+    state.recordKind = draft.recordKind === 'daily' ? 'daily' : 'occurrence';
     state.customOccurrence = draft.customOccurrence || '';
     state.notes = draft.notes || '';
     state.dateTime = draft.dateTime || '';
     state.photoDataUrl = draft.photoDataUrl || '';
     state.location = draft.location || null;
     state.historyMode = draft.historyMode || 'selected';
+    state.historyFilters = { ...state.historyFilters, ...(draft.historyFilters || {}) };
   } catch {
     clearDraft();
   }
@@ -543,13 +578,15 @@ function saveDraft() {
     manualSchoolSelection: state.manualSchoolSelection,
     selectedStudents: state.selectedStudents,
     selectedClass: state.selectedClass,
-    selectedOccurrence: state.selectedOccurrence,
+    selectedOccurrences: state.selectedOccurrences,
+    recordKind: state.recordKind,
     customOccurrence: state.customOccurrence,
     notes: state.notes,
     dateTime: state.dateTime,
     photoDataUrl: state.photoDataUrl,
     location: state.location,
     historyMode: state.historyMode,
+    historyFilters: state.historyFilters,
   }));
 }
 
@@ -557,6 +594,8 @@ function clearDraft() {
   localStorage.removeItem(storageKeys.draft);
   state.manualSchoolSelection = false;
   state.selectedStudents = [];
+  state.selectedOccurrences = [];
+  state.recordKind = 'occurrence';
   state.customOccurrence = '';
   state.notes = '';
   state.dateTime = '';
@@ -575,6 +614,10 @@ function syncAuthUi() {
   if (elements.logoutButton) {
     elements.logoutButton.classList.toggle('hidden', !state.authUser);
   }
+
+  document.querySelectorAll('a[href="settings.html"]').forEach((link) => {
+    link.classList.toggle('hidden', !canManageSettings());
+  });
 }
 
 function applySchoolTheme() {
@@ -604,10 +647,10 @@ function updateHeader() {
 
   const pageTitles = {
     login: ['Acesso seguro', 'Entrar no ClassLog', 'Use seu usuário e senha para acessar o sistema.'],
-    students: ['Etapa 1', `Selecionar alunos - ${schoolName}`, 'Escolha um ou mais alunos para iniciar a ocorrência.'],
-    occurrence: ['Etapa 2', `Escolher ocorrência - ${schoolName}`, 'Selecione o tipo da ocorrência e avance.'],
-    finalize: ['Etapa 3', `Complementar informações - ${schoolName}`, 'Revise data, local, foto e observação antes de salvar.'],
-    history: ['Histórico', `Ocorrências - ${schoolName}`, 'Veja registros recentes e filtre por alunos selecionados.'],
+    students: ['Etapa 1', `Selecionar alunos ou turma - ${schoolName}`, 'Escolha alunos ou a turma inteira para iniciar o Log.'],
+    occurrence: ['Etapa 2', `Tipo de Log - ${schoolName}`, 'Selecione uma ou mais ocorrências ou use o Registro de Diário.'],
+    finalize: ['Etapa 3', `Informações - ${schoolName}`, 'Revise data, local, foto e observação antes de salvar.'],
+    history: ['Histórico', `Logs - ${schoolName}`, 'Filtre os registros por aluno, data, tipo e turma.'],
     settings: ['Configurações', 'Painel da coordenação', 'Ajuste regras e visual por escola.'],
   };
 
@@ -641,11 +684,11 @@ function canEditReport(report) {
   if (!state.authUser || report.deletedAt) {
     return false;
   }
-  return state.authUser.role === 'coordinator' || report.createdBy === state.authUser.username;
+  return ['coordinator', 'admin'].includes(state.authUser.role) || report.createdBy === state.authUser.username;
 }
 
 function canDeleteReport(report) {
-  return Boolean(state.authUser && state.authUser.role === 'coordinator' && !report.deletedAt);
+  return Boolean(state.authUser && ['coordinator', 'admin'].includes(state.authUser.role) && !report.deletedAt);
 }
 
 function loadImageElement(source) {
@@ -735,6 +778,8 @@ function renderSchoolSelects() {
       elements.schoolSelect.appendChild(option);
     });
     elements.schoolSelect.value = state.selectedSchoolId;
+    const picker = elements.schoolSelect.closest('.school-picker');
+    if (picker) picker.classList.toggle('hidden', schools.length <= 1);
   }
 
   if (elements.settingsSchoolSelect) {
@@ -844,18 +889,30 @@ function renderStudentChips() {
     button.type = 'button';
     button.className = `chip ${isSelected ? 'active' : ''}`;
 
-    const disciplinary = disciplinaryByStudent.get(student.fullName);
+    const disciplinary = student.targetType === 'student' ? disciplinaryByStudent.get(student.fullName) : null;
     const daysSuffix = disciplinary ? ` (${disciplinary.remainingBusinessDays}d)` : '';
-    button.textContent = `${student.displayName}${daysSuffix}`;
+    button.textContent = student.targetType === 'class'
+      ? `Selecionar turma inteira: ${student.displayName}`
+      : `${student.displayName}${daysSuffix}`;
+    if (student.targetType === 'class') button.classList.add('class-target');
     if (disciplinary) {
       button.classList.add('disciplinary-alert');
     }
 
     button.setAttribute('aria-pressed', String(isSelected));
     button.addEventListener('click', () => {
-      state.selectedStudents = isSelected
-        ? state.selectedStudents.filter((fullName) => fullName !== student.fullName)
-        : [...state.selectedStudents, student.fullName];
+      if (student.targetType === 'class') {
+        const classNames = new Set(studentRoster.filter((entry) => entry.classKey === student.classKey).map((entry) => entry.fullName));
+        state.selectedStudents = isSelected
+          ? state.selectedStudents.filter((fullName) => fullName !== student.fullName)
+          : [...state.selectedStudents.filter((fullName) => !classNames.has(fullName)), student.fullName];
+      } else {
+        const classTargetName = `__CLASS__:${state.selectedSchoolId}:${student.classKey}`;
+        state.selectedStudents = state.selectedStudents.filter((fullName) => fullName !== classTargetName);
+        state.selectedStudents = isSelected
+          ? state.selectedStudents.filter((fullName) => fullName !== student.fullName)
+          : [...state.selectedStudents, student.fullName];
+      }
       saveDraft();
       renderAll();
     });
@@ -873,12 +930,15 @@ function renderOccurrenceChips() {
   occurrenceTypes.forEach((type) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = `chip ${state.selectedOccurrence === type ? 'active' : ''}`;
+    const isSelected = state.selectedOccurrences.includes(type);
+    button.className = `chip ${isSelected ? 'active' : ''}`;
     button.textContent = type;
     button.disabled = !hasStudents;
     button.addEventListener('click', () => {
-      state.selectedOccurrence = type;
-      if (type !== 'Outra') {
+      state.selectedOccurrences = isSelected
+        ? state.selectedOccurrences.filter((value) => value !== type)
+        : [...state.selectedOccurrences, type];
+      if (type === 'Outra' && isSelected) {
         state.customOccurrence = '';
       }
       saveDraft();
@@ -888,10 +948,20 @@ function renderOccurrenceChips() {
   });
 }
 
+function renderRecordKindChips() {
+  if (!elements.recordKindChips) return;
+  elements.recordKindChips.querySelectorAll('[data-record-kind]').forEach((button) => {
+    const isSelected = button.dataset.recordKind === state.recordKind;
+    button.classList.toggle('active', isSelected);
+    button.setAttribute('aria-pressed', String(isSelected));
+    button.disabled = state.selectedStudents.length === 0;
+  });
+}
+
 function renderCustomOccurrenceField() {
   if (!elements.otherOccurrenceField || !elements.otherOccurrence) return;
 
-  const showCustomField = state.selectedOccurrence === 'Outra';
+  const showCustomField = state.selectedOccurrences.includes('Outra');
   elements.otherOccurrenceField.classList.toggle('hidden', !showCustomField);
   elements.otherOccurrence.disabled = !showCustomField;
   if (!showCustomField) {
@@ -965,22 +1035,78 @@ function getFilteredReports() {
     return report.schoolId === state.selectedSchoolId;
   });
 
+  let filtered = schoolReports;
   if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
     const selectedNames = new Set(state.selectedStudents);
-    return schoolReports.filter((report) => (report.selectedStudents || []).some((student) => selectedNames.has(student.fullName)));
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => selectedNames.has(student.fullName)));
   }
 
-  return schoolReports;
+  const filters = state.historyFilters;
+  if (filters.student) {
+    const query = normalizeKey(filters.student);
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => (
+      normalizeKey(student.displayName).includes(query) || normalizeKey(student.fullName).includes(query)
+    )));
+  }
+  if (filters.date) {
+    filtered = filtered.filter((report) => String(report.occurredAt || '').slice(0, 10) === filters.date);
+  }
+  if (filters.occurrence) {
+    filtered = filtered.filter((report) => (report.occurrenceTypes || [report.occurrenceLabel]).includes(filters.occurrence));
+  }
+  if (filters.classKey) {
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => student.classKey === filters.classKey));
+  }
+  if (filters.recordKind) {
+    filtered = filtered.filter((report) => (report.recordKind || 'occurrence') === filters.recordKind);
+  }
+  return filtered;
+}
+
+function renderHistoryFilters() {
+  if (!elements.historyOccurrenceFilter) return;
+
+  const setOptions = (select, options, placeholder, selectedValue) => {
+    select.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = placeholder;
+    select.appendChild(empty);
+    options.forEach(({ value, label }) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    select.value = selectedValue || '';
+  };
+
+  setOptions(
+    elements.historyOccurrenceFilter,
+    ['Registro de Diário', ...getOccurrenceTypes()].map((type) => ({ value: type, label: type })),
+    'Todos os tipos',
+    state.historyFilters.occurrence,
+  );
+  setOptions(
+    elements.historyClassFilter,
+    getCurrentClassGroups().map((group) => ({ value: group.key, label: group.label })),
+    'Todas as turmas',
+    state.historyFilters.classKey,
+  );
+  if (elements.historyStudentFilter) elements.historyStudentFilter.value = state.historyFilters.student;
+  if (elements.historyDateFilter) elements.historyDateFilter.value = state.historyFilters.date;
+  if (elements.historyKindFilter) elements.historyKindFilter.value = state.historyFilters.recordKind;
 }
 
 function renderHistory() {
   if (!elements.records || !elements.recordTemplate || !elements.historyHint) return;
 
   const filteredReports = getFilteredReports();
+  renderHistoryFilters();
   elements.records.innerHTML = '';
 
   if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
-    elements.historyHint.textContent = `Mostrando ${filteredReports.length} ocorrencia(s) de ${summarizeSelectedStudents()}.`;
+    elements.historyHint.textContent = `Mostrando ${filteredReports.length} Log(s) de ${summarizeSelectedStudents()}.`;
   } else {
     elements.historyHint.textContent = `Visao geral com ${filteredReports.length} registro(s).`;
   }
@@ -988,7 +1114,7 @@ function renderHistory() {
   if (filteredReports.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'hint';
-    empty.textContent = 'Nenhuma ocorrencia encontrada nesta visao.';
+    empty.textContent = 'Nenhum Log encontrado com estes filtros.';
     elements.records.appendChild(empty);
     return;
   }
@@ -1016,7 +1142,7 @@ function renderHistory() {
       studentsWrap.appendChild(tag);
     });
 
-    occurrence.textContent = report.occurrenceLabel;
+    occurrence.textContent = `${report.recordKind === 'daily' ? 'Registro de Diário' : 'Ocorrências'}: ${report.occurrenceLabel}`;
     datetime.textContent = report.formalTime || formatDateTime(report.occurredAt || report.createdAt);
     notes.textContent = report.notes || 'Sem observacoes adicionais.';
     status.textContent = statusLabel(report.status);
@@ -1030,6 +1156,12 @@ function renderHistory() {
     const schoolTag = document.createElement('span');
     schoolTag.textContent = school ? `Escola ${school.name}` : 'Escola nao informada';
     meta.appendChild(schoolTag);
+    const classLabels = [...new Set((report.selectedStudents || []).map((student) => student.classLabel).filter(Boolean))];
+    if (classLabels.length) {
+      const classTag = document.createElement('span');
+      classTag.textContent = `Turma ${classLabels.join(', ')}`;
+      meta.appendChild(classTag);
+    }
 
     if (isDeleted) {
       const deletedTag = document.createElement('span');
@@ -1203,13 +1335,15 @@ async function saveReportEdits() {
 
   const payload = {
     schoolId: report.schoolId || state.selectedSchoolId,
-    occurrenceLabel: elements.recordOccurrenceLabel ? elements.recordOccurrenceLabel.value.trim() : report.occurrenceLabel,
+    occurrenceTypes: elements.recordOccurrenceLabel
+      ? elements.recordOccurrenceLabel.value.split(/\s*\+\s*/).map((value) => value.trim()).filter(Boolean)
+      : report.occurrenceTypes,
     notes: elements.recordNotes ? elements.recordNotes.value.trim() : report.notes,
     occurredAt: elements.recordOccurredAt ? elements.recordOccurredAt.value : report.occurredAt,
     status: elements.recordStatus ? elements.recordStatus.value : report.status,
   };
 
-  if (!payload.occurrenceLabel) {
+  if (!payload.occurrenceTypes.length) {
     alert('A ocorrencia nao pode ficar vazia.');
     return;
   }
@@ -1288,8 +1422,11 @@ async function deleteReport() {
   }
 }
 
-function normalizeOccurrenceLabel() {
-  return state.selectedOccurrence === 'Outra' ? state.customOccurrence.trim() : state.selectedOccurrence;
+function getSelectedOccurrenceTypes() {
+  const selected = state.selectedOccurrences
+    .map((type) => (type === 'Outra' ? state.customOccurrence.trim() : type))
+    .filter(Boolean);
+  return state.recordKind === 'daily' ? ['Registro de Diário', ...selected] : selected;
 }
 
 function createReportPayload() {
@@ -1298,8 +1435,12 @@ function createReportPayload() {
     selectedStudents: getSelectedStudents().map((student) => ({
       fullName: student.fullName,
       displayName: student.displayName,
+      classKey: student.classKey,
+      classLabel: student.classLabel,
+      targetType: student.targetType,
     })),
-    occurrenceLabel: normalizeOccurrenceLabel(),
+    occurrenceTypes: getSelectedOccurrenceTypes(),
+    recordKind: state.recordKind,
     notes: state.notes.trim(),
     occurredAt: state.dateTime || new Date().toISOString(),
     location: state.location,
@@ -1313,9 +1454,9 @@ async function saveReport() {
     return;
   }
 
-  const occurrenceLabel = normalizeOccurrenceLabel();
-  if (!occurrenceLabel) {
-    alert('Escolha ou escreva o tipo de ocorrencia.');
+  const occurrenceTypes = getSelectedOccurrenceTypes();
+  if (!occurrenceTypes.length) {
+    alert('Escolha ao menos um tipo de Log.');
     return;
   }
 
@@ -1330,7 +1471,7 @@ async function saveReport() {
     await loadDisciplinaryActions();
     navigate('history');
   } catch {
-    alert('Nao foi possivel salvar a ocorrencia no servidor.');
+    alert('Nao foi possivel salvar o Log no servidor.');
   }
 }
 
@@ -1340,9 +1481,9 @@ async function saveOccurrenceStep() {
     return;
   }
 
-  const occurrenceLabel = normalizeOccurrenceLabel();
-  if (!occurrenceLabel) {
-    alert('Escolha ou escreva o tipo de ocorrencia.');
+  const occurrenceTypes = getSelectedOccurrenceTypes();
+  if (!occurrenceTypes.length) {
+    alert('Escolha ao menos um tipo de Log.');
     return;
   }
 
@@ -1429,12 +1570,18 @@ async function assignDisciplinaryMoment() {
   const note = elements.disciplinaryNote ? elements.disciplinaryNote.value.trim() : '';
 
   try {
-    for (const studentName of state.selectedStudents) {
+    const individualStudents = getSelectedStudents().filter((student) => student.targetType !== 'class');
+    if (individualStudents.length === 0) {
+      alert('O momento disciplinar deve ser aplicado a alunos individuais, não à turma inteira.');
+      return;
+    }
+
+    for (const student of individualStudents) {
       await apiRequest('/api/disciplinary-actions', {
         method: 'POST',
         body: JSON.stringify({
           schoolId: state.selectedSchoolId,
-          studentFullName: studentName,
+          studentFullName: student.fullName,
           days,
           note,
         }),
@@ -1442,7 +1589,7 @@ async function assignDisciplinaryMoment() {
     }
 
     if (elements.disciplinaryHint) {
-      elements.disciplinaryHint.textContent = `Momento disciplinar atualizado para ${state.selectedStudents.length} aluno(s).`;
+      elements.disciplinaryHint.textContent = `Momento disciplinar atualizado para ${individualStudents.length} aluno(s).`;
     }
     if (elements.disciplinaryNote) elements.disciplinaryNote.value = '';
     await loadDisciplinaryActions();
@@ -1490,7 +1637,7 @@ function renderDisciplinaryPanel() {
 function fillSettingsForm() {
   if (!elements.settingsPanel) return;
 
-  if (!state.authUser || state.authUser.role !== 'coordinator') {
+  if (!canManageSettings()) {
     elements.settingsPanel.innerHTML = '<p class="hint">Apenas a coordenacao pode editar configuracoes.</p>';
     return;
   }
@@ -1511,7 +1658,7 @@ function fillSettingsForm() {
 }
 
 async function saveSettings() {
-  if (!state.authUser || state.authUser.role !== 'coordinator') {
+  if (!canManageSettings()) {
     return;
   }
 
@@ -1569,9 +1716,9 @@ async function saveSettings() {
 
 function updatePageState() {
   const hasStudents = state.selectedStudents.length > 0;
-  const currentOccurrence = state.selectedOccurrence === 'Outra' ? state.customOccurrence.trim() : state.selectedOccurrence;
+  const currentOccurrences = getSelectedOccurrenceTypes();
   const canMoveToOccurrence = hasStudents;
-  const canMoveToFinalize = hasStudents && Boolean(currentOccurrence);
+  const canMoveToFinalize = hasStudents && currentOccurrences.length > 0;
 
   if (elements.clearStudentButton) elements.clearStudentButton.disabled = !hasStudents;
   if (elements.studentNextButton) elements.studentNextButton.disabled = !canMoveToOccurrence;
@@ -1581,7 +1728,7 @@ function updatePageState() {
 
   if (elements.occurrenceHint) {
     elements.occurrenceHint.textContent = hasStudents
-      ? 'Salve esta etapa para abrir os campos de complementacao.'
+      ? 'Selecione quantos tipos forem necessários ou escolha Registro de Diário.'
       : 'Selecione um ou mais alunos para liberar esta etapa.';
   }
 
@@ -1605,6 +1752,7 @@ function renderPageSpecificFields() {
   renderSelectedStudentsStrip();
   renderStudentChips();
   renderOccurrenceChips();
+  renderRecordKindChips();
   renderCustomOccurrenceField();
   renderPhotoPreview();
   renderLocation();
@@ -1665,9 +1813,19 @@ function bindEvents() {
   if (elements.otherOccurrence) {
     elements.otherOccurrence.addEventListener('input', () => {
       state.customOccurrence = elements.otherOccurrence.value;
-      if (state.customOccurrence.trim()) {
-        state.selectedOccurrence = 'Outra';
+      if (state.customOccurrence.trim() && !state.selectedOccurrences.includes('Outra')) {
+        state.selectedOccurrences.push('Outra');
       }
+      saveDraft();
+      renderAll();
+    });
+  }
+
+  if (elements.recordKindChips) {
+    elements.recordKindChips.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-record-kind]');
+      if (!button || button.disabled) return;
+      state.recordKind = button.dataset.recordKind === 'daily' ? 'daily' : 'occurrence';
       saveDraft();
       renderAll();
     });
@@ -1741,6 +1899,30 @@ function bindEvents() {
 
   if (elements.historyBackButton) {
     elements.historyBackButton.addEventListener('click', () => navigate('finalize'));
+  }
+
+  const historyFilterBindings = [
+    [elements.historyStudentFilter, 'student', 'input'],
+    [elements.historyDateFilter, 'date', 'change'],
+    [elements.historyOccurrenceFilter, 'occurrence', 'change'],
+    [elements.historyClassFilter, 'classKey', 'change'],
+    [elements.historyKindFilter, 'recordKind', 'change'],
+  ];
+  historyFilterBindings.forEach(([element, key, eventName]) => {
+    if (!element) return;
+    element.addEventListener(eventName, () => {
+      state.historyFilters[key] = element.value;
+      saveDraft();
+      renderHistory();
+    });
+  });
+  if (elements.historyClearFilters) {
+    elements.historyClearFilters.addEventListener('click', () => {
+      state.historyFilters = { student: '', date: '', occurrence: '', classKey: '', recordKind: '' };
+      state.historyMode = 'all';
+      saveDraft();
+      renderAll();
+    });
   }
 
   if (elements.logoutButton) {
@@ -1831,6 +2013,11 @@ async function initPage() {
 
   if (!state.authUser) {
     navigate('login');
+    return;
+  }
+
+  if (state.page === 'settings' && !canManageSettings()) {
+    navigate('students');
     return;
   }
 

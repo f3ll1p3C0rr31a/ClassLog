@@ -28,12 +28,12 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 ## Como usar
 1. Execute `npm start`.
 2. Abra `http://localhost:3000`.
-3. Entre com `coordenacao` / `ClassLog@2026`.
-4. Selecione um ou mais alunos.
-5. Escolha ou escreva a ocorrência.
-6. Capture a localização, se quiser registrar.
-7. Adicione foto e observações.
-8. Encerre e salve a ocorrência.
+3. Para a Escola Fátima, entre com `coordenacao` / `ClassLog@2026`.
+4. Para a EC303, entre com `grasi` / `gra123`.
+5. Selecione alunos ou uma turma inteira.
+6. Escolha um ou mais tipos de Log ou Registro de Diário.
+7. Adicione data, localização, foto e observações.
+8. Salve o Log.
 
 ## Multi-escola (configuração padrão)
 - `Fátima` (particular): 07:15 às 12:30.

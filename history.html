@@ -15,11 +15,11 @@
       <section class="hero-card">
         <div>
           <p class="eyebrow" id="pageSubtitle">Histórico</p>
-          <h1 id="pageTitle">Ocorrências salvas</h1>
-          <p class="hero-copy" id="pageDescription">Veja registros recentes e filtre por alunos selecionados.</p>
+          <h1 id="pageTitle">Logs salvos</h1>
+          <p class="hero-copy" id="pageDescription">Filtre por aluno, data, tipo de ocorrência e turma.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.0.1 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.1.1 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -47,8 +47,8 @@
 
       <nav class="step-nav">
         <a class="step-link" href="index.html">Alunos</a>
-        <a class="step-link" href="occurrence.html">Ocorrência</a>
-        <a class="step-link" href="finalize.html">Salvar</a>
+        <a class="step-link" href="occurrence.html">Log</a>
+        <a class="step-link" href="finalize.html">Informações</a>
         <a class="step-link active" href="history.html">Histórico</a>
         <a class="step-link" href="settings.html">Configuração</a>
       </nav>
@@ -65,9 +65,36 @@
           </div>
         </div>
         <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
+        <div class="history-filter-grid">
+          <label class="field">
+            <span>Aluno ou turma</span>
+            <input id="historyStudentFilter" type="search" placeholder="Digite um nome..." />
+          </label>
+          <label class="field">
+            <span>Data</span>
+            <input id="historyDateFilter" type="date" />
+          </label>
+          <label class="field">
+            <span>Tipo de ocorrência</span>
+            <select id="historyOccurrenceFilter"></select>
+          </label>
+          <label class="field">
+            <span>Turma</span>
+            <select id="historyClassFilter"></select>
+          </label>
+          <label class="field">
+            <span>Categoria</span>
+            <select id="historyKindFilter">
+              <option value="">Todas</option>
+              <option value="occurrence">Ocorrência</option>
+              <option value="daily">Registro de Diário</option>
+            </select>
+          </label>
+        </div>
         <p class="hint" id="historyHint">Selecione um aluno para ver o histórico filtrado.</p>
         <div class="page-actions split-actions">
           <button class="ghost-button" type="button" id="historyBackButton">Voltar</button>
+          <button class="ghost-button" type="button" id="historyClearFilters">Limpar filtros</button>
         </div>
       </section>
 
@@ -108,7 +135,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow" id="recordModalSubtitle">Registro</p>
-            <h2 id="recordModalTitle">Editar ocorrência</h2>
+            <h2 id="recordModalTitle">Editar Log</h2>
           </div>
           <button class="ghost-button" type="button" id="closeRecordModal">Fechar</button>
         </div>
@@ -117,8 +144,8 @@
 
         <form id="recordEditForm" class="grid-two">
           <label class="field">
-            <span>Data da ocorrência</span>
-            <input id="recordOccurredAt" type="datetime-local" />
+            <span>Data do Log</span>
+            <input id="recordOccurredAt" type="datetime-local" lang="pt-BR" />
           </label>
           <label class="field">
             <span>Status</span>
@@ -131,7 +158,7 @@
             </select>
           </label>
           <label class="field">
-            <span>Ocorrência</span>
+            <span>Tipos do Log</span>
             <input id="recordOccurrenceLabel" type="text" />
           </label>
           <label class="field">
@@ -144,7 +171,7 @@
           <div class="panel-head">
             <div>
               <p class="eyebrow">Comentários</p>
-              <h2>Andamento da ocorrência</h2>
+              <h2>Andamento do Log</h2>
             </div>
           </div>
           <div class="record-comments" id="recordComments"></div>

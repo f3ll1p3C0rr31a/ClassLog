@@ -15,11 +15,11 @@
       <section class="hero-card">
         <div>
           <p class="eyebrow" id="pageSubtitle">Etapa 2</p>
-          <h1 id="pageTitle">Escolher ocorrência</h1>
-          <p class="hero-copy" id="pageDescription">Selecione o tipo da ocorrência e salve para complementar os dados.</p>
+          <h1 id="pageTitle">Tipo de Log</h1>
+          <p class="hero-copy" id="pageDescription">Selecione uma ou mais ocorrências ou registre o diário de aula.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.0.1 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.1.1 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -47,8 +47,8 @@
 
       <nav class="step-nav">
         <a class="step-link" href="index.html">Alunos</a>
-        <a class="step-link active" href="occurrence.html">Ocorrência</a>
-        <a class="step-link" href="finalize.html">Salvar</a>
+        <a class="step-link active" href="occurrence.html">Log</a>
+        <a class="step-link" href="finalize.html">Informações</a>
         <a class="step-link" href="history.html">Histórico</a>
         <a class="step-link" href="settings.html">Configuração</a>
       </nav>
@@ -67,7 +67,7 @@
         <div class="panel-head">
           <div>
             <p class="eyebrow">Etapa 2</p>
-            <h2>Tipo da ocorrência</h2>
+            <h2>Tipos de ocorrência</h2>
           </div>
         </div>
         <div class="chips chips-strong" id="occurrenceChips"></div>
@@ -75,10 +75,23 @@
           <label for="otherOccurrence"><span>Ocorrência não padronizada</span></label>
           <input id="otherOccurrence" type="text" placeholder="Ex.: atraso na troca de aula" />
         </div>
+        <div class="panel-subsection">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Outro tipo de Log</p>
+              <h2>Registro de Diário</h2>
+            </div>
+          </div>
+          <div class="chips chips-strong record-kind-chips" id="recordKindChips">
+            <button class="chip" type="button" data-record-kind="occurrence">Ocorrência</button>
+            <button class="chip" type="button" data-record-kind="daily">Registro de Diário</button>
+          </div>
+          <p class="hint">Use para registrar conteúdo dado, foto do quadro e observações da aula.</p>
+        </div>
         <p class="hint" id="occurrenceHint">Selecione um ou mais alunos para liberar esta etapa.</p>
         <div class="page-actions split-actions">
           <button class="ghost-button" type="button" id="occurrenceBackButton">Voltar</button>
-          <button class="primary-button" type="button" id="occurrenceNextButton">Salvar</button>
+          <button class="primary-button" type="button" id="occurrenceNextButton">Informações</button>
         </div>
       </section>
     </main>

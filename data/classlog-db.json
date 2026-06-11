@@ -4,9 +4,13 @@
       "id": "b1c1b1a5-8fd4-4c63-a7e2-46de6e3d2d49",
       "username": "fellipecorreia",
       "displayName": "Fellipe Correia",
-      "role": "coordinator",
+      "role": "admin",
       "salt": "fd6ab7dd5a41cd1f64444557985e869f",
-      "hash": "6480bdda5e7fd266bcd9b2bd62f0a4a8724f92643a6e1633d013415ed00e1c6bf6fc93725a62e0785af717672e245360fae2889958a11af69f59992c962e3aeb"
+      "hash": "6480bdda5e7fd266bcd9b2bd62f0a4a8724f92643a6e1633d013415ed00e1c6bf6fc93725a62e0785af717672e245360fae2889958a11af69f59992c962e3aeb",
+      "schoolIds": [
+        "fatima",
+        "ec303"
+      ]
     },
     {
       "id": "2cec456d-c970-4919-8847-36a6f150d009",
@@ -14,7 +18,10 @@
       "displayName": "Coordenação",
       "role": "coordinator",
       "salt": "ee58533bf2fd4e4abe818610e6a1bbb9",
-      "hash": "a9a2ab53f4ad7f5f7e1373a23d9449fd3f79b1246043f00746a182735d590611aa7399068a3911083e7c9f023dc7c780db32f6c6744a3ba6bcdefecacc989df0"
+      "hash": "a9a2ab53f4ad7f5f7e1373a23d9449fd3f79b1246043f00746a182735d590611aa7399068a3911083e7c9f023dc7c780db32f6c6744a3ba6bcdefecacc989df0",
+      "schoolIds": [
+        "fatima"
+      ]
     },
     {
       "id": "9156d07e-c255-4615-937c-061a47f03f97",
@@ -22,13 +29,27 @@
       "displayName": "Professor",
       "role": "teacher",
       "salt": "451eb444684894b65be5d94ecd2dafae",
-      "hash": "af1238dc3efb7a32d5f537dc2845766fd428cc27fdede8741ad7363b102aec51b1563630f47b9ccd22594b618011a7a0c95e57e5195fb7f0d9211936e8764533"
+      "hash": "af1238dc3efb7a32d5f537dc2845766fd428cc27fdede8741ad7363b102aec51b1563630f47b9ccd22594b618011a7a0c95e57e5195fb7f0d9211936e8764533",
+      "schoolIds": [
+        "fatima"
+      ]
+    },
+    {
+      "id": "3f968220-643b-41b1-a1ee-d50dee552f0c",
+      "username": "grasi",
+      "displayName": "Grasi - Coordenação EC303",
+      "role": "coordinator",
+      "schoolIds": [
+        "ec303"
+      ],
+      "salt": "7af950c66f16538b136ddeeb4f7b5017",
+      "hash": "b8099179b8bae6bbb47acbf5ffcd1966cf4b01617e6d7f8070c78426a463b5c0b61f2432836cc23a64c62fd64fe09f58a0cca4750f305a6bf431168f9b7d5c4c"
     }
   ],
   "reports": [
     {
       "id": "36f8fbd3-6741-4ece-bd82-d9ec100ef70e",
-      "schoolId": null,
+      "schoolId": "fatima",
       "createdBy": "fellipecorreia",
       "createdByName": "Fellipe Correia",
       "updatedBy": "fellipecorreia",
@@ -40,10 +61,17 @@
       "selectedStudents": [
         {
           "fullName": "GABRIELA REDONDO DO OURO",
-          "displayName": "Gabriela Ouro"
+          "displayName": "Gabriela Ouro",
+          "classKey": "",
+          "classLabel": "",
+          "targetType": "student"
         }
       ],
+      "occurrenceTypes": [
+        "Uso indevido do celular"
+      ],
       "occurrenceLabel": "Uso indevido do celular",
+      "recordKind": "occurrence",
       "notes": "",
       "location": null,
       "photoDataUrl": "",
@@ -57,7 +85,7 @@
     },
     {
       "id": "eec68c08-de6d-4b83-86d5-9be81ad40e34",
-      "schoolId": null,
+      "schoolId": "fatima",
       "createdBy": "coordenacao",
       "createdByName": "Coordenação",
       "updatedBy": "fellipecorreia",
@@ -69,14 +97,25 @@
       "selectedStudents": [
         {
           "fullName": "BRYAN MARQUES MARTINS",
-          "displayName": "Bryan"
+          "displayName": "Bryan",
+          "classKey": "",
+          "classLabel": "",
+          "targetType": "student"
         }
       ],
+      "occurrenceTypes": [
+        "Não copiou"
+      ],
       "occurrenceLabel": "Não copiou",
+      "recordKind": "occurrence",
       "notes": "teste",
       "location": null,
       "photoDataUrl": "",
       "status": "excluida",
+      "deletedAt": "2026-05-31T20:48:26.758Z",
+      "deletedBy": "fellipecorreia",
+      "deletedByName": "Fellipe Correia",
+      "deletedReason": "Teste",
       "comments": [],
       "auditTrail": [
         {
@@ -102,15 +141,11 @@
             }
           ]
         }
-      ],
-      "deletedAt": "2026-05-31T20:48:26.758Z",
-      "deletedBy": "fellipecorreia",
-      "deletedByName": "Fellipe Correia",
-      "deletedReason": "Teste"
+      ]
     },
     {
       "id": "5def1c9d-3d40-4cdf-9742-271377d1c690",
-      "schoolId": null,
+      "schoolId": "fatima",
       "createdBy": "coordenacao",
       "createdByName": "Coordenação",
       "updatedBy": "coordenacao",
@@ -122,14 +157,25 @@
       "selectedStudents": [
         {
           "fullName": "GABRIELA REDONDO DO OURO",
-          "displayName": "Gabriela Ouro"
+          "displayName": "Gabriela Ouro",
+          "classKey": "",
+          "classLabel": "",
+          "targetType": "student"
         }
       ],
+      "occurrenceTypes": [
+        "Não fez atividade"
+      ],
       "occurrenceLabel": "Não fez atividade",
+      "recordKind": "occurrence",
       "notes": "TEste1",
       "location": null,
       "photoDataUrl": "",
       "status": "excluida",
+      "deletedAt": "2026-05-30T17:49:30.059Z",
+      "deletedBy": "coordenacao",
+      "deletedByName": "Coordenação",
+      "deletedReason": "Registro duplicado",
       "comments": [],
       "auditTrail": [
         {
@@ -155,11 +201,7 @@
             }
           ]
         }
-      ],
-      "deletedAt": "2026-05-30T17:49:30.059Z",
-      "deletedBy": "coordenacao",
-      "deletedByName": "Coordenação",
-      "deletedReason": "Registro duplicado"
+      ]
     }
   ],
   "settings": {
@@ -197,9 +239,9 @@
         "name": "EC303",
         "educationType": "publica",
         "palette": {
-          "primary": "#1f7a36",
-          "secondary": "#ffd447",
-          "accent": "#0f5824",
+          "primary": "#168821",
+          "secondary": "#ffffff",
+          "accent": "#0b6413",
           "background": "#ffffff"
         },
         "schedule": {
@@ -232,7 +274,7 @@
       "startDate": "2026-06-03",
       "endDate": "2026-06-09",
       "totalBusinessDays": 5,
-      "status": "active",
+      "status": "completed",
       "createdAt": "2026-06-03T10:54:53.745Z",
       "updatedAt": "2026-06-03T10:54:53.748Z",
       "createdBy": "coordenacao",

@@ -16,6 +16,8 @@ const DEFAULT_DISPLAY_NAME = process.env.CLASSLOG_DISPLAY_NAME || 'Coordenação
 const OWNER_USERNAME = process.env.CLASSLOG_OWNER_USERNAME || 'fellipecorreia';
 const OWNER_PASSWORD = process.env.CLASSLOG_OWNER_PASSWORD || 'kimilove';
 const OWNER_DISPLAY_NAME = process.env.CLASSLOG_OWNER_DISPLAY_NAME || 'Fellipe Correia';
+const EC303_USERNAME = process.env.CLASSLOG_EC303_USERNAME || 'grasi';
+const EC303_PASSWORD = process.env.CLASSLOG_EC303_PASSWORD || 'gra123';
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -72,6 +74,7 @@ function createDefaultUser() {
     username: DEFAULT_USERNAME,
     displayName: DEFAULT_DISPLAY_NAME,
     role: 'coordinator',
+    schoolIds: ['fatima'],
     ...passwordRecord,
   };
 }
@@ -83,6 +86,7 @@ function createDefaultProfessor() {
     username: process.env.CLASSLOG_TEACHER_USERNAME || 'professor',
     displayName: process.env.CLASSLOG_TEACHER_DISPLAY_NAME || 'Professor',
     role: 'teacher',
+    schoolIds: ['fatima'],
     ...passwordRecord,
   };
 }
@@ -93,7 +97,20 @@ function createDefaultOwner() {
     id: crypto.randomUUID(),
     username: OWNER_USERNAME,
     displayName: OWNER_DISPLAY_NAME,
+    role: 'admin',
+    schoolIds: ['fatima', 'ec303'],
+    ...passwordRecord,
+  };
+}
+
+function createEc303Coordinator() {
+  const passwordRecord = createPasswordRecord(EC303_PASSWORD);
+  return {
+    id: crypto.randomUUID(),
+    username: EC303_USERNAME,
+    displayName: 'Grasi - Coordenação EC303',
     role: 'coordinator',
+    schoolIds: ['ec303'],
     ...passwordRecord,
   };
 }
@@ -125,9 +142,9 @@ function createDefaultSettings() {
         name: 'EC303',
         educationType: 'publica',
         palette: {
-          primary: '#1f7a36',
-          secondary: '#ffd447',
-          accent: '#0f5824',
+          primary: '#168821',
+          secondary: '#ffffff',
+          accent: '#0b6413',
           background: '#ffffff',
         },
         schedule: {
@@ -148,6 +165,8 @@ function formatDateTime(value) {
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
+    hourCycle: 'h23',
+    hour12: false,
   }).format(new Date(value));
 }
 
@@ -408,9 +427,23 @@ async function ensureDatabase() {
       parsed.users.push(createDefaultOwner());
     }
 
+    if (!parsed.users.some((entry) => entry.username === EC303_USERNAME)) {
+      parsed.users.push(createEc303Coordinator());
+    }
+
+    parsed.users = parsed.users.map((user) => {
+      if (Array.isArray(user.schoolIds) && user.schoolIds.length > 0) return user;
+      if (user.username === OWNER_USERNAME) return { ...user, role: 'admin', schoolIds: ['fatima', 'ec303'] };
+      return { ...user, schoolIds: ['fatima'] };
+    });
+
     if (!Array.isArray(parsed.reports)) {
       parsed.reports = [];
     }
+    parsed.reports = parsed.reports.map((report) => ({
+      ...sanitizeReport(report),
+      schoolId: report.schoolId || 'fatima',
+    }));
 
     parsed.settings = normalizeSettings(parsed.settings);
     parsed.disciplinaryActions = normalizeDisciplinaryActions(parsed.disciplinaryActions);
@@ -419,7 +452,7 @@ async function ensureDatabase() {
     await persistDatabase();
   } catch {
     database = {
-      users: [createDefaultUser(), createDefaultProfessor(), createDefaultOwner()],
+      users: [createDefaultUser(), createDefaultProfessor(), createDefaultOwner(), createEc303Coordinator()],
       reports: [],
       settings: createDefaultSettings(),
       disciplinaryActions: [],
@@ -449,6 +482,7 @@ function getUserFromRequest(req) {
     username: user.username,
     displayName: user.displayName,
     role: user.role,
+    schoolIds: getUserSchoolIds(user),
   };
 }
 
@@ -519,8 +553,41 @@ function normalizeStudents(students) {
     .map((student) => ({
       fullName: String(student.fullName || '').trim(),
       displayName: String(student.displayName || '').trim(),
+      classKey: String(student.classKey || '').trim(),
+      classLabel: String(student.classLabel || '').trim(),
+      targetType: student.targetType === 'class' ? 'class' : 'student',
     }))
     .filter((student) => student.fullName && student.displayName);
+}
+
+function normalizeOccurrenceTypes(values, fallbackLabel = '') {
+  const input = Array.isArray(values) ? values : [fallbackLabel];
+  return [...new Set(input.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function getUserSchoolIds(user) {
+  return Array.isArray(user?.schoolIds) ? user.schoolIds.filter(Boolean) : [];
+}
+
+function canAccessSchool(user, schoolId) {
+  return Boolean(schoolId && getUserSchoolIds(user).includes(schoolId));
+}
+
+function getDefaultSchoolIdForUser(user) {
+  return getUserSchoolIds(user)[0] || null;
+}
+
+function canCoordinate(user) {
+  return user?.role === 'coordinator' || user?.role === 'admin';
+}
+
+function getAccessibleSettings(user) {
+  const settings = normalizeSettings(database.settings);
+  const allowed = new Set(getUserSchoolIds(user));
+  return {
+    ...settings,
+    schools: settings.schools.filter((school) => allowed.has(school.id)),
+  };
 }
 
 function normalizeComments(comments) {
@@ -558,6 +625,7 @@ function formatReportOccurrenceTime(occurredAt) {
 }
 
 function sanitizeReport(report) {
+  const occurrenceTypes = normalizeOccurrenceTypes(report.occurrenceTypes, report.occurrenceLabel);
   return {
     id: report.id,
     schoolId: report.schoolId || null,
@@ -570,7 +638,9 @@ function sanitizeReport(report) {
     occurredAt: report.occurredAt,
     formalTime: report.formalTime || formatReportOccurrenceTime(report.occurredAt),
     selectedStudents: normalizeStudents(report.selectedStudents),
-    occurrenceLabel: String(report.occurrenceLabel || '').trim(),
+    occurrenceTypes,
+    occurrenceLabel: occurrenceTypes.join(' + '),
+    recordKind: report.recordKind === 'daily' ? 'daily' : 'occurrence',
     notes: String(report.notes || '').trim(),
     location: report.location || null,
     photoDataUrl: report.photoDataUrl || '',
@@ -591,6 +661,8 @@ function compareField(previousValue, nextValue) {
 function buildChanges(previousReport, nextReport) {
   const trackedFields = [
     'selectedStudents',
+    'occurrenceTypes',
+    'recordKind',
     'occurrenceLabel',
     'notes',
     'occurredAt',
@@ -639,6 +711,7 @@ async function handleLogin(req, res, body) {
         username: user.username,
         displayName: user.displayName,
         role: user.role,
+        schoolIds: getUserSchoolIds(user),
       },
     },
     {
@@ -660,23 +733,29 @@ function handleLogout(res) {
 
 async function createReport(req, res, body, user) {
   const selectedStudents = normalizeStudents(body.selectedStudents);
-  const occurrenceLabel = String(body.occurrenceLabel || '').trim();
+  const occurrenceTypes = normalizeOccurrenceTypes(body.occurrenceTypes, body.occurrenceLabel);
   const occurredAt = String(body.occurredAt || '').trim() || nowIso();
+  const schoolId = String(body.schoolId || getDefaultSchoolIdForUser(user) || '').trim();
 
   if (selectedStudents.length === 0) {
     sendJson(res, 400, { error: 'missing_students' });
     return;
   }
 
-  if (!occurrenceLabel) {
+  if (occurrenceTypes.length === 0) {
     sendJson(res, 400, { error: 'missing_occurrence' });
+    return;
+  }
+
+  if (!canAccessSchool(user, schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
     return;
   }
 
   const timestamp = nowIso();
   const report = sanitizeReport({
     id: crypto.randomUUID(),
-    schoolId: body.schoolId || detectActiveSchoolId(database.settings),
+    schoolId,
     createdBy: user.username,
     createdByName: user.displayName,
     updatedBy: user.username,
@@ -686,7 +765,9 @@ async function createReport(req, res, body, user) {
     occurredAt,
     formalTime: formatReportOccurrenceTime(occurredAt),
     selectedStudents,
-    occurrenceLabel,
+    occurrenceTypes,
+    occurrenceLabel: occurrenceTypes.join(' + '),
+    recordKind: body.recordKind === 'daily' ? 'daily' : 'occurrence',
     notes: String(body.notes || '').trim(),
     location: body.location || null,
     photoDataUrl: String(body.photoDataUrl || ''),
@@ -712,7 +793,12 @@ async function updateReport(req, res, body, user, reportId) {
     return;
   }
 
-  const canEdit = user.role === 'coordinator' || report.createdBy === user.username;
+  if (!canAccessSchool(user, report.schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
+    return;
+  }
+
+  const canEdit = canCoordinate(user) || report.createdBy === user.username;
   if (!canEdit) {
     sendJson(res, 403, { error: 'edit_forbidden' });
     return;
@@ -720,9 +806,10 @@ async function updateReport(req, res, body, user, reportId) {
 
   const nextReport = {
     ...report,
-    schoolId: body.schoolId || report.schoolId || detectActiveSchoolId(database.settings),
+    schoolId: report.schoolId,
     selectedStudents: normalizeStudents(body.selectedStudents ?? report.selectedStudents),
-    occurrenceLabel: String(body.occurrenceLabel ?? report.occurrenceLabel).trim(),
+    occurrenceTypes: normalizeOccurrenceTypes(body.occurrenceTypes, body.occurrenceLabel ?? report.occurrenceLabel),
+    recordKind: body.recordKind === 'daily' ? 'daily' : (report.recordKind || 'occurrence'),
     notes: String(body.notes ?? report.notes).trim(),
     occurredAt: String(body.occurredAt ?? report.occurredAt).trim() || report.occurredAt,
     location: body.location === undefined ? report.location : body.location,
@@ -732,6 +819,7 @@ async function updateReport(req, res, body, user, reportId) {
     updatedBy: user.username,
     updatedByName: user.displayName,
   };
+  nextReport.occurrenceLabel = nextReport.occurrenceTypes.join(' + ');
   nextReport.formalTime = formatReportOccurrenceTime(nextReport.occurredAt);
 
   const changes = buildChanges(report, nextReport);
@@ -760,8 +848,13 @@ async function deleteReport(req, res, body, user, reportId) {
     return;
   }
 
-  if (user.role !== 'coordinator') {
+  if (!canCoordinate(user)) {
     sendJson(res, 403, { error: 'delete_forbidden' });
+    return;
+  }
+
+  if (!canAccessSchool(user, report.schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
     return;
   }
 
@@ -809,6 +902,11 @@ async function addComment(req, res, body, user, reportId) {
     return;
   }
 
+  if (!canAccessSchool(user, report.schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
+    return;
+  }
+
   const text = String(body.comment || body.text || '').trim();
   if (!text) {
     sendJson(res, 400, { error: 'missing_comment' });
@@ -851,6 +949,11 @@ function sanitizeDisciplinaryAction(action) {
 }
 
 async function listDisciplinaryActions(req, res, schoolId) {
+  const user = getUserFromRequest(req);
+  if (!user || (schoolId && !canAccessSchool(user, schoolId))) {
+    sendJson(res, 403, { error: 'school_forbidden' });
+    return;
+  }
   const today = toDateOnlyLocal();
   let changed = false;
 
@@ -866,7 +969,7 @@ async function listDisciplinaryActions(req, res, schoolId) {
   }
 
   const filtered = database.disciplinaryActions
-    .filter((action) => !schoolId || action.schoolId === schoolId)
+    .filter((action) => canAccessSchool(user, action.schoolId) && (!schoolId || action.schoolId === schoolId))
     .map((action) => sanitizeDisciplinaryAction(action))
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
@@ -874,13 +977,18 @@ async function listDisciplinaryActions(req, res, schoolId) {
 }
 
 async function saveDisciplinaryAction(req, res, body, user) {
-  const schoolId = String(body.schoolId || detectActiveSchoolId(database.settings) || '').trim();
+  const schoolId = String(body.schoolId || getDefaultSchoolIdForUser(user) || '').trim();
   const studentFullName = String(body.studentFullName || '').trim();
   const daysToAdd = Math.max(1, Number(body.days) || 1);
   const note = String(body.note || '').trim();
 
   if (!schoolId) {
     sendJson(res, 400, { error: 'missing_school' });
+    return;
+  }
+
+  if (!canAccessSchool(user, schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
     return;
   }
 
@@ -978,9 +1086,9 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === '/api/context' && req.method === 'GET') {
-    const settings = normalizeSettings(database.settings);
-    database.settings = settings;
-    const activeSchoolId = detectActiveSchoolId(settings);
+    database.settings = normalizeSettings(database.settings);
+    const settings = getAccessibleSettings(user);
+    const activeSchoolId = detectActiveSchoolId(settings) || getDefaultSchoolIdForUser(user);
     sendJson(res, 200, {
       user,
       settings,
@@ -990,18 +1098,33 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === '/api/settings' && req.method === 'GET') {
-    sendJson(res, 200, { settings: normalizeSettings(database.settings) });
+    if (!canCoordinate(user)) {
+      sendJson(res, 403, { error: 'settings_forbidden' });
+      return;
+    }
+    sendJson(res, 200, { settings: getAccessibleSettings(user) });
     return;
   }
 
   if (url.pathname === '/api/settings' && req.method === 'PUT') {
-    if (user.role !== 'coordinator') {
+    if (!canCoordinate(user)) {
       sendJson(res, 403, { error: 'settings_forbidden' });
       return;
     }
 
     const body = await readJsonBody(req);
-    database.settings = normalizeSettings(body.settings || body);
+    const submitted = normalizeSettings(body.settings || body);
+    const current = normalizeSettings(database.settings);
+    const allowed = new Set(getUserSchoolIds(user));
+    database.settings = normalizeSettings({
+      ...current,
+      schools: current.schools.map((school) => (
+        allowed.has(school.id)
+          ? submitted.schools.find((entry) => entry.id === school.id) || school
+          : school
+      )),
+      holidays: submitted.holidays,
+    });
     await persistDatabase();
     sendJson(res, 200, { settings: database.settings });
     return;
@@ -1020,7 +1143,9 @@ async function handleApi(req, res, url) {
   }
 
   if (url.pathname === '/api/reports' && req.method === 'GET') {
+    const allowed = new Set(getUserSchoolIds(user));
     const ordered = [...database.reports]
+      .filter((report) => allowed.has(report.schoolId))
       .map((report) => sanitizeReport(report))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     sendJson(res, 200, { reports: ordered });
@@ -1087,6 +1212,11 @@ async function serveApp(req, res) {
   const filePath = path.join(ROOT, pathname.replace(/^\/+/, ''));
   const ext = path.extname(filePath).toLowerCase();
   const authUser = getUserFromRequest(req);
+
+  if (pathname === '/settings.html' && authUser && !canCoordinate(authUser)) {
+    redirect(res, '/index.html');
+    return;
+  }
 
   if (url.pathname.startsWith('/api/')) {
     await handleApi(req, res, url);

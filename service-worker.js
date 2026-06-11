@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classlog-static-v2';
+const CACHE_NAME = 'classlog-static-v4';
 const ASSETS = [
   '/login.html',
   '/index.html',

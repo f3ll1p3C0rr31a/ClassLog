@@ -19,7 +19,7 @@
           <p class="hero-copy" id="pageDescription">Revise data, localização, foto e observação antes de salvar.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.0.1 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.1.1 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -47,8 +47,8 @@
 
       <nav class="step-nav">
         <a class="step-link" href="index.html">Alunos</a>
-        <a class="step-link" href="occurrence.html">Ocorrência</a>
-        <a class="step-link active" href="finalize.html">Salvar</a>
+        <a class="step-link" href="occurrence.html">Log</a>
+        <a class="step-link active" href="finalize.html">Informações</a>
         <a class="step-link" href="history.html">Histórico</a>
         <a class="step-link" href="settings.html">Configuração</a>
       </nav>
@@ -61,14 +61,14 @@
           </div>
         </div>
         <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
-        <p class="hint" id="occurrenceHint">Use a etapa anterior para definir a ocorrência.</p>
+        <p class="hint" id="occurrenceHint">Use a etapa anterior para definir o Log.</p>
       </section>
 
       <section class="panel" id="finalizePanel">
         <div class="grid-two">
           <label class="field">
-            <span>Data da ocorrência</span>
-            <input id="dateTime" type="datetime-local" />
+            <span>Data do Log</span>
+            <input id="dateTime" type="datetime-local" lang="pt-BR" />
           </label>
           <div class="location-box">
             <div>

@@ -5,6 +5,6 @@
   "display": "standalone",
   "background_color": "#f4f8ff",
   "theme_color": "#16324f",
-  "description": "Registro escolar mobile-first com suporte multi-escola.",
+  "description": "Logs escolares e registros de diário com acesso separado por escola.",
   "icons": []
 }
