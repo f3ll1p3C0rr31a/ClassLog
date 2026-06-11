@@ -173,12 +173,13 @@ const schoolClassGroups = {
 };
 
 const storageKeys = {
-  draft: 'classlog-draft-v6',
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
-const appVersion = '1.1.1';
+const appVersion = '1.2.0';
 const appStage = 'ALPHA';
+const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
+const syncIntervalMs = 60 * 1000;
 
 const pageMap = {
   login: 'login.html',
@@ -215,6 +216,11 @@ const state = {
   },
   authUser: null,
   activeReportId: null,
+  isOfflineSession: false,
+  syncState: 'idle',
+  syncError: '',
+  pendingCount: 0,
+  syncTimer: null,
 };
 
 function $(id) {
@@ -318,6 +324,7 @@ const elements = {
   settingsDisciplinaryToggle: $('settingsDisciplinaryToggle'),
   settingsSaveButton: $('settingsSaveButton'),
   settingsHint: $('settingsHint'),
+  syncStatus: $('syncStatus'),
 };
 
 function normalizeKey(value) {
@@ -479,14 +486,25 @@ function rebuildSchoolDependentState() {
 }
 
 async function apiRequest(pathname, options = {}) {
-  const response = await fetch(pathname, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
+  let response;
+  try {
+    response = await fetch(pathname, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      ...options,
+      signal: options.signal || controller.signal,
+    });
+  } catch (error) {
+    error.isNetworkError = true;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const contentType = response.headers.get('content-type') || '';
   const body = contentType.includes('application/json') ? await response.json() : null;
@@ -501,35 +519,152 @@ async function apiRequest(pathname, options = {}) {
   return body;
 }
 
+function getOfflineScope(schoolId = state.selectedSchoolId) {
+  return window.ClassLogOffline.makeScope(state.authUser?.username, schoolId);
+}
+
+function isOfflineSessionValid(session) {
+  return Boolean(
+    session
+    && !session.locked
+    && session.user
+    && Number(session.expiresAt) > Date.now(),
+  );
+}
+
 async function loadAuthUser() {
-  try {
-    const response = await apiRequest('/api/auth/me', { method: 'GET' });
-    state.authUser = response.user;
-    return response.user;
-  } catch {
-    state.authUser = null;
-    return null;
+  if (!navigator.onLine) {
+    const session = await window.ClassLogOffline.getSession();
+    if (isOfflineSessionValid(session)) {
+      state.authUser = session.user;
+      state.selectedSchoolId = session.activeSchoolId;
+      state.isOfflineSession = true;
+      return session.user;
+    }
   }
+
+  try {
+    const response = await apiRequest('/api/auth/me', { method: 'GET', timeoutMs: 3000 });
+    if (response.user) {
+      state.authUser = response.user;
+      state.isOfflineSession = false;
+      return response.user;
+    }
+  } catch {
+    // Fall through to the local authorization.
+  }
+
+  const session = await window.ClassLogOffline.getSession();
+  if (isOfflineSessionValid(session)) {
+    state.authUser = session.user;
+    state.selectedSchoolId = session.activeSchoolId;
+    state.isOfflineSession = true;
+    return session.user;
+  }
+
+  state.authUser = null;
+  return null;
 }
 
 async function loadContext() {
-  const response = await apiRequest('/api/context', { method: 'GET' });
-  state.settings = response.settings || { schools: [], holidays: [] };
+  if (state.isOfflineSession) {
+    const cached = await window.ClassLogOffline.getContext(getOfflineScope());
+    if (!cached?.settings) throw new Error('offline_context_unavailable');
+    state.settings = cached.settings;
+    state.selectedSchoolId = cached.activeSchoolId || state.selectedSchoolId;
+    rebuildSchoolDependentState();
+    return;
+  }
 
-  if (!state.manualSchoolSelection) {
-    state.selectedSchoolId = response.activeSchoolId || state.selectedSchoolId;
+  try {
+    const response = await apiRequest('/api/context', { method: 'GET', timeoutMs: 4000 });
+    state.settings = response.settings || { schools: [], holidays: [] };
+    if (!state.manualSchoolSelection) {
+      state.selectedSchoolId = response.activeSchoolId || state.selectedSchoolId;
+    }
+    state.isOfflineSession = false;
+    const scope = getOfflineScope();
+    await window.ClassLogOffline.saveContext(scope, {
+      settings: state.settings,
+      activeSchoolId: state.selectedSchoolId,
+      savedAt: new Date().toISOString(),
+    });
+    await window.ClassLogOffline.saveSession({
+      user: state.authUser,
+      activeSchoolId: state.selectedSchoolId,
+      expiresAt: Date.now() + offlineSessionDurationMs,
+      locked: false,
+    });
+  } catch (error) {
+    const session = await window.ClassLogOffline.getSession();
+    if (!isOfflineSessionValid(session)) throw error;
+    state.selectedSchoolId = session.activeSchoolId;
+    const cached = await window.ClassLogOffline.getContext(getOfflineScope());
+    if (!cached?.settings) throw error;
+    state.settings = cached.settings;
+    state.isOfflineSession = true;
   }
 
   rebuildSchoolDependentState();
 }
 
 async function loadReports() {
-  try {
-    const response = await apiRequest('/api/reports', { method: 'GET' });
-    state.reports = Array.isArray(response.reports) ? response.reports : [];
-  } catch {
-    state.reports = [];
+  if (state.isOfflineSession) {
+    state.reports = await window.ClassLogOffline.getReports(getOfflineScope());
+    return;
   }
+
+  try {
+    const response = await apiRequest('/api/reports?days=30', { method: 'GET', timeoutMs: 5000 });
+    const serverReports = Array.isArray(response.reports) ? response.reports : [];
+    const scope = getOfflineScope();
+    const pending = await window.ClassLogOffline.getQueue(scope);
+    const serverRequestIds = new Set(serverReports.map((report) => report.clientRequestId).filter(Boolean));
+    const pendingReports = pending
+      .map((entry) => entry.localReport)
+      .filter((report) => report && !serverRequestIds.has(report.clientRequestId));
+    state.reports = [...pendingReports, ...serverReports];
+    await window.ClassLogOffline.replaceReports(scope, state.reports);
+  } catch {
+    state.reports = await window.ClassLogOffline.getReports(getOfflineScope());
+  }
+}
+
+async function migrateLegacyDraft() {
+  const legacyKey = 'classlog-draft-v6';
+  const raw = localStorage.getItem(legacyKey);
+  if (!raw) return;
+  try {
+    const current = await window.ClassLogOffline.getDraft(getOfflineScope());
+    if (!current) {
+      await window.ClassLogOffline.saveDraft(getOfflineScope(), JSON.parse(raw));
+    }
+  } catch {
+    // Ignore malformed drafts from older versions.
+  } finally {
+    localStorage.removeItem(legacyKey);
+  }
+}
+
+async function primeOfflineAccess(loginUser) {
+  state.authUser = loginUser;
+  const context = await apiRequest('/api/context', { method: 'GET' });
+  state.settings = context.settings || { schools: [], holidays: [] };
+  state.selectedSchoolId = context.activeSchoolId || loginUser.schoolIds?.[0] || 'fatima';
+  const scope = getOfflineScope();
+  await window.ClassLogOffline.saveContext(scope, {
+    settings: state.settings,
+    activeSchoolId: state.selectedSchoolId,
+    savedAt: new Date().toISOString(),
+  });
+  await window.ClassLogOffline.saveSession({
+    user: loginUser,
+    activeSchoolId: state.selectedSchoolId,
+    expiresAt: Date.now() + offlineSessionDurationMs,
+    locked: false,
+  });
+  const reportsResponse = await apiRequest('/api/reports?days=30', { method: 'GET' });
+  await window.ClassLogOffline.replaceReports(scope, reportsResponse.reports || []);
 }
 
 async function loadDisciplinaryActions() {
@@ -546,12 +681,10 @@ async function loadDisciplinaryActions() {
   }
 }
 
-function loadDraft() {
+async function loadDraft() {
   try {
-    const raw = localStorage.getItem(storageKeys.draft);
-    if (!raw) return;
-
-    const draft = JSON.parse(raw);
+    const draft = await window.ClassLogOffline.getDraft(getOfflineScope());
+    if (!draft) return;
     state.selectedSchoolId = draft.selectedSchoolId || state.selectedSchoolId;
     state.manualSchoolSelection = Boolean(draft.manualSchoolSelection);
     state.selectedClass = draft.selectedClass || state.selectedClass;
@@ -568,30 +701,47 @@ function loadDraft() {
     state.historyMode = draft.historyMode || 'selected';
     state.historyFilters = { ...state.historyFilters, ...(draft.historyFilters || {}) };
   } catch {
-    clearDraft();
+    await clearDraft();
+  }
+
+  if (state.isOfflineSession || !navigator.onLine) {
+    state.disciplinaryActions = [];
+    return;
   }
 }
 
-function saveDraft() {
-  localStorage.setItem(storageKeys.draft, JSON.stringify({
-    selectedSchoolId: state.selectedSchoolId,
-    manualSchoolSelection: state.manualSchoolSelection,
-    selectedStudents: state.selectedStudents,
-    selectedClass: state.selectedClass,
-    selectedOccurrences: state.selectedOccurrences,
-    recordKind: state.recordKind,
-    customOccurrence: state.customOccurrence,
-    notes: state.notes,
-    dateTime: state.dateTime,
-    photoDataUrl: state.photoDataUrl,
-    location: state.location,
-    historyMode: state.historyMode,
-    historyFilters: state.historyFilters,
-  }));
+async function saveDraft() {
+  if (!state.authUser || !state.selectedSchoolId) return;
+  try {
+    await window.ClassLogOffline.saveDraft(getOfflineScope(), {
+      selectedSchoolId: state.selectedSchoolId,
+      manualSchoolSelection: state.manualSchoolSelection,
+      selectedStudents: state.selectedStudents,
+      selectedClass: state.selectedClass,
+      selectedOccurrences: state.selectedOccurrences,
+      recordKind: state.recordKind,
+      customOccurrence: state.customOccurrence,
+      notes: state.notes,
+      dateTime: state.dateTime,
+      photoDataUrl: state.photoDataUrl,
+      location: state.location,
+      historyMode: state.historyMode,
+      historyFilters: state.historyFilters,
+    });
+    return true;
+  } catch (error) {
+    state.syncError = error?.name === 'QuotaExceededError'
+      ? 'O armazenamento do aparelho está cheio.'
+      : 'Não foi possível preservar o rascunho no aparelho.';
+    renderSyncStatus();
+    return false;
+  }
 }
 
-function clearDraft() {
-  localStorage.removeItem(storageKeys.draft);
+async function clearDraft() {
+  if (state.authUser && state.selectedSchoolId) {
+    await window.ClassLogOffline.clearDraft(getOfflineScope());
+  }
   state.manualSchoolSelection = false;
   state.selectedStudents = [];
   state.selectedOccurrences = [];
@@ -618,6 +768,46 @@ function syncAuthUi() {
   document.querySelectorAll('a[href="settings.html"]').forEach((link) => {
     link.classList.toggle('hidden', !canManageSettings());
   });
+
+  ensureSyncStatusElement();
+  renderSyncStatus();
+}
+
+function ensureSyncStatusElement() {
+  if ($('syncStatus')) return;
+  const heroActions = document.querySelector('.hero-actions');
+  if (!heroActions || state.page === 'login') return;
+  const badge = document.createElement('span');
+  badge.id = 'syncStatus';
+  badge.className = 'session-label sync-status';
+  badge.setAttribute('role', 'status');
+  badge.setAttribute('aria-live', 'polite');
+  heroActions.insertBefore(badge, elements.logoutButton || null);
+}
+
+function renderSyncStatus() {
+  const badge = $('syncStatus');
+  if (!badge) return;
+
+  let label = 'Tudo sincronizado';
+  let status = 'synced';
+  if (!navigator.onLine || state.isOfflineSession) {
+    label = state.pendingCount > 0 ? `Offline · ${state.pendingCount} pendente(s)` : 'Offline';
+    status = 'offline';
+  } else if (state.syncState === 'syncing') {
+    label = 'Sincronizando';
+    status = 'syncing';
+  } else if (state.syncState === 'error') {
+    label = state.pendingCount > 0 ? `Falha · ${state.pendingCount} pendente(s)` : 'Falha na sincronização';
+    status = 'error';
+  } else if (state.pendingCount > 0) {
+    label = `${state.pendingCount} pendente(s)`;
+    status = 'pending';
+  }
+
+  badge.textContent = label;
+  badge.dataset.status = status;
+  badge.title = state.syncError || label;
 }
 
 function applySchoolTheme() {
@@ -681,14 +871,21 @@ function navigate(pageName) {
 }
 
 function canEditReport(report) {
-  if (!state.authUser || report.deletedAt) {
+  if (!state.authUser || report.deletedAt || report.syncState === 'pending' || state.isOfflineSession || !navigator.onLine) {
     return false;
   }
   return ['coordinator', 'admin'].includes(state.authUser.role) || report.createdBy === state.authUser.username;
 }
 
 function canDeleteReport(report) {
-  return Boolean(state.authUser && ['coordinator', 'admin'].includes(state.authUser.role) && !report.deletedAt);
+  return Boolean(
+    state.authUser
+    && ['coordinator', 'admin'].includes(state.authUser.role)
+    && !report.deletedAt
+    && report.syncState !== 'pending'
+    && !state.isOfflineSession
+    && navigator.onLine,
+  );
 }
 
 function loadImageElement(source) {
@@ -1145,7 +1342,10 @@ function renderHistory() {
     occurrence.textContent = `${report.recordKind === 'daily' ? 'Registro de Diário' : 'Ocorrências'}: ${report.occurrenceLabel}`;
     datetime.textContent = report.formalTime || formatDateTime(report.occurredAt || report.createdAt);
     notes.textContent = report.notes || 'Sem observacoes adicionais.';
-    status.textContent = statusLabel(report.status);
+    status.textContent = report.syncState === 'pending'
+      ? 'Aguardando sincronização'
+      : report.syncState === 'error' ? 'Erro de sincronização' : statusLabel(report.status);
+    if (report.syncState) status.dataset.syncState = report.syncState;
     timeline.textContent = report.updatedAt && report.updatedAt !== report.createdAt
       ? `Criado em ${formatDateTime(report.createdAt)} · Editado em ${formatDateTime(report.updatedAt)}`
       : `Criado em ${formatDateTime(report.createdAt)}`;
@@ -1199,12 +1399,12 @@ function renderHistory() {
 
     if (editButton) {
       editButton.disabled = !canEditReport(report);
-      editButton.textContent = isDeleted ? 'Excluida' : 'Editar';
+      editButton.textContent = report.syncState === 'pending' ? 'Pendente' : isDeleted ? 'Excluida' : 'Editar';
       editButton.addEventListener('click', () => openReportModal(report.id));
     }
 
     if (commentButton) {
-      commentButton.disabled = isDeleted;
+      commentButton.disabled = isDeleted || report.syncState === 'pending' || state.isOfflineSession || !navigator.onLine;
       commentButton.addEventListener('click', () => openReportModal(report.id));
     }
 
@@ -1328,6 +1528,11 @@ async function saveReportEdits() {
   const report = getActiveReport();
   if (!report) return;
 
+  if (!navigator.onLine || state.isOfflineSession) {
+    alert('A edição de Logs precisa de conexão com a internet.');
+    return;
+  }
+
   if (!canEditReport(report)) {
     alert('Voce nao tem permissao para editar esta ocorrencia.');
     return;
@@ -1367,6 +1572,11 @@ async function addReportComment() {
 
   if (report.deletedAt) {
     alert('Nao e possivel comentar uma ocorrencia excluida.');
+    return;
+  }
+
+  if (!navigator.onLine || state.isOfflineSession) {
+    alert('Os comentários precisam de conexão com a internet.');
     return;
   }
 
@@ -1429,8 +1639,14 @@ function getSelectedOccurrenceTypes() {
   return state.recordKind === 'daily' ? ['Registro de Diário', ...selected] : selected;
 }
 
-function createReportPayload() {
+function createClientRequestId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createReportPayload(clientRequestId = createClientRequestId()) {
   return {
+    clientRequestId,
     schoolId: state.selectedSchoolId,
     selectedStudents: getSelectedStudents().map((student) => ({
       fullName: student.fullName,
@@ -1448,6 +1664,167 @@ function createReportPayload() {
   };
 }
 
+function createPendingReport(payload) {
+  const timestamp = new Date().toISOString();
+  return {
+    id: `local-${payload.clientRequestId}`,
+    clientRequestId: payload.clientRequestId,
+    schoolId: payload.schoolId,
+    createdBy: state.authUser.username,
+    createdByName: state.authUser.displayName,
+    updatedBy: state.authUser.username,
+    updatedByName: state.authUser.displayName,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    occurredAt: payload.occurredAt,
+    formalTime: formatDateTime(payload.occurredAt),
+    selectedStudents: payload.selectedStudents,
+    occurrenceTypes: payload.occurrenceTypes,
+    occurrenceLabel: payload.occurrenceTypes.join(' + '),
+    recordKind: payload.recordKind,
+    notes: payload.notes,
+    location: payload.location,
+    photoDataUrl: payload.photoDataUrl,
+    status: 'aberta',
+    comments: [],
+    auditTrail: [],
+    syncState: 'pending',
+  };
+}
+
+async function refreshPendingCount() {
+  if (!state.authUser || !state.selectedSchoolId) {
+    state.pendingCount = 0;
+  } else {
+    const queue = await window.ClassLogOffline.getQueue(getOfflineScope());
+    state.pendingCount = queue.length;
+  }
+  renderSyncStatus();
+}
+
+function getRetryDelay(attempts) {
+  return Math.min(5 * 60 * 1000, 5000 * (2 ** Math.min(attempts, 6)));
+}
+
+async function requestBackgroundSync() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    if ('sync' in registration) {
+      await registration.sync.register('classlog-sync');
+    }
+  } catch {
+    // Foreground synchronization remains the fallback.
+  }
+}
+
+async function synchronizePendingReports() {
+  if (!state.authUser || state.syncState === 'syncing' || !navigator.onLine) {
+    await refreshPendingCount();
+    return;
+  }
+
+  if (state.isOfflineSession) {
+    try {
+      const response = await apiRequest('/api/auth/me', { method: 'GET', timeoutMs: 3000 });
+      if (!response.user || response.user.username !== state.authUser.username) {
+        await refreshPendingCount();
+        return;
+      }
+      state.authUser = response.user;
+      state.isOfflineSession = false;
+      await loadContext();
+      await loadReports();
+      renderAll();
+    } catch {
+      await refreshPendingCount();
+      return;
+    }
+  }
+
+  const scope = getOfflineScope();
+  const queue = await window.ClassLogOffline.getQueue(scope);
+  const now = Date.now();
+  const ready = queue.filter((item) => item.status !== 'error' && (!item.nextAttemptAt || item.nextAttemptAt <= now));
+  if (ready.length === 0) {
+    await refreshPendingCount();
+    return;
+  }
+
+  state.syncState = 'syncing';
+  state.syncError = '';
+  renderSyncStatus();
+
+  for (const item of ready) {
+    try {
+      const photo = item.photoKey ? await window.ClassLogOffline.getPhoto(item.photoKey) : null;
+      const response = await apiRequest('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...item.payload,
+          photoDataUrl: photo?.dataUrl || item.payload.photoDataUrl || '',
+        }),
+        timeoutMs: 20000,
+      });
+      await window.ClassLogOffline.removeQueue(item.clientRequestId);
+      await window.ClassLogOffline.removeReport(item.clientRequestId);
+      if (item.photoKey) await window.ClassLogOffline.removePhoto(item.photoKey);
+      await window.ClassLogOffline.upsertReport(scope, response.report);
+    } catch (error) {
+      if (error.status === 401) {
+        state.isOfflineSession = true;
+        state.syncError = 'Sessão expirada. Entre novamente quando houver conexão.';
+        break;
+      }
+
+      const attempts = Number(item.attempts || 0) + 1;
+      const permanent = error.status >= 400 && error.status < 500;
+      const localReport = permanent
+        ? { ...item.localReport, syncState: 'error', syncError: error.body?.error || error.message }
+        : item.localReport;
+      await window.ClassLogOffline.updateQueue({
+        ...item,
+        localReport,
+        attempts,
+        status: permanent ? 'error' : 'pending',
+        lastError: error.body?.error || error.message || 'sync_failed',
+        nextAttemptAt: permanent ? null : Date.now() + getRetryDelay(attempts),
+      });
+      if (permanent && localReport) {
+        await window.ClassLogOffline.upsertReport(scope, localReport);
+      }
+      state.syncError = permanent
+        ? 'Um Log pendente precisa ser revisado.'
+        : 'A conexão oscilou. Tentaremos novamente automaticamente.';
+    }
+  }
+
+  state.syncState = state.syncError ? 'error' : 'idle';
+  await refreshPendingCount();
+  await loadReports();
+  renderAll();
+  if (state.pendingCount > 0) await requestBackgroundSync();
+}
+
+function setupAutomaticSync() {
+  if (state.syncTimer) clearInterval(state.syncTimer);
+  state.syncTimer = setInterval(() => {
+    synchronizePendingReports();
+  }, syncIntervalMs);
+
+  window.addEventListener('online', () => {
+    renderSyncStatus();
+    synchronizePendingReports();
+  });
+  window.addEventListener('offline', renderSyncStatus);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') synchronizePendingReports();
+  });
+  navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'CLASSLOG_SYNC') synchronizePendingReports();
+  });
+}
+
 async function saveReport() {
   if (!state.selectedStudents.length) {
     alert('Selecione um ou mais alunos antes de salvar.');
@@ -1460,18 +1837,35 @@ async function saveReport() {
     return;
   }
 
+  const payload = createReportPayload();
+  const localReport = createPendingReport(payload);
+  const scope = getOfflineScope();
+  const photoKey = payload.photoDataUrl ? `photo:${payload.clientRequestId}` : '';
+  const queuedPayload = photoKey ? { ...payload, photoDataUrl: '', photoKey } : payload;
+  const queuedReport = photoKey ? { ...localReport, photoDataUrl: '', photoKey } : localReport;
+
   try {
-    await apiRequest('/api/reports', {
-      method: 'POST',
-      body: JSON.stringify(createReportPayload()),
-    });
-    clearDraft();
-    saveDraft();
-    await loadReports();
-    await loadDisciplinaryActions();
+    await window.ClassLogOffline.savePendingReport(scope, {
+      clientRequestId: payload.clientRequestId,
+      payload: queuedPayload,
+      localReport: queuedReport,
+      photoKey,
+      status: 'pending',
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+    }, queuedReport, payload.photoDataUrl);
+    state.reports = [localReport, ...state.reports];
+    await clearDraft();
+    await refreshPendingCount();
+    alert('Salvo no aparelho. A sincronização acontecerá automaticamente.');
+    requestBackgroundSync();
+    synchronizePendingReports();
     navigate('history');
-  } catch {
-    alert('Nao foi possivel salvar o Log no servidor.');
+  } catch (error) {
+    const storageFull = error?.name === 'QuotaExceededError';
+    alert(storageFull
+      ? 'O armazenamento do aparelho está cheio. Remova arquivos ou fotos antes de salvar.'
+      : 'Não foi possível salvar o Log no aparelho.');
   }
 }
 
@@ -1543,18 +1937,39 @@ async function captureLocation(options = {}) {
   });
 }
 
-function handlePhotoChange(event) {
+async function handlePhotoChange(event) {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  compressImageFile(file).then((compressedDataUrl) => {
+  try {
+    const compressedDataUrl = await compressImageFile(file);
+    if (navigator.storage?.estimate) {
+      const estimate = await navigator.storage.estimate();
+      const available = Math.max(0, Number(estimate.quota || 0) - Number(estimate.usage || 0));
+      const estimatedBytes = Math.ceil(compressedDataUrl.length * 0.75);
+      if (available > 0 && estimatedBytes > available * 0.8) {
+        throw Object.assign(new Error('storage_full'), { name: 'QuotaExceededError' });
+      }
+    }
     state.photoDataUrl = compressedDataUrl;
-    saveDraft();
+    const saved = await saveDraft();
+    if (!saved) throw Object.assign(new Error('draft_not_saved'), { name: 'QuotaExceededError' });
     renderPhotoPreview();
-  });
+  } catch (error) {
+    state.photoDataUrl = '';
+    if (elements.photoInput) elements.photoInput.value = '';
+    alert(error?.name === 'QuotaExceededError'
+      ? 'Não há espaço suficiente no aparelho para guardar esta foto.'
+      : 'Não foi possível preparar a foto.');
+    renderPhotoPreview();
+  }
 }
 
 async function assignDisciplinaryMoment() {
+  if (!navigator.onLine || state.isOfflineSession) {
+    alert('O momento disciplinar precisa de conexão com a internet.');
+    return;
+  }
   const school = getActiveSchool();
   if (!school?.policies?.disciplinaryMomentEnabled) {
     alert('Este recurso nao esta habilitado para esta escola.');
@@ -1637,6 +2052,11 @@ function renderDisciplinaryPanel() {
 function fillSettingsForm() {
   if (!elements.settingsPanel) return;
 
+  if (!navigator.onLine || state.isOfflineSession) {
+    elements.settingsPanel.innerHTML = '<p class="hint">As configurações precisam de conexão com a internet.</p>';
+    return;
+  }
+
   if (!canManageSettings()) {
     elements.settingsPanel.innerHTML = '<p class="hint">Apenas a coordenacao pode editar configuracoes.</p>';
     return;
@@ -1658,7 +2078,7 @@ function fillSettingsForm() {
 }
 
 async function saveSettings() {
-  if (!canManageSettings()) {
+  if (!canManageSettings() || !navigator.onLine || state.isOfflineSession) {
     return;
   }
 
@@ -1736,7 +2156,7 @@ function updatePageState() {
   if (elements.historyAllButton) elements.historyAllButton.classList.toggle('active', state.historyMode === 'all');
 
   if (elements.disciplinaryButton) {
-    elements.disciplinaryButton.disabled = !hasStudents;
+    elements.disciplinaryButton.disabled = !hasStudents || !navigator.onLine || state.isOfflineSession;
   }
 }
 
@@ -1770,6 +2190,11 @@ function renderAll() {
 }
 
 async function onSchoolChange(nextSchoolId, manual = true) {
+  if (!navigator.onLine || state.isOfflineSession) {
+    alert('A troca de escola precisa de conexão com a internet.');
+    renderSchoolSelects();
+    return;
+  }
   state.selectedSchoolId = nextSchoolId;
   state.manualSchoolSelection = manual;
   state.selectedStudents = [];
@@ -1927,12 +2352,12 @@ function bindEvents() {
 
   if (elements.logoutButton) {
     elements.logoutButton.addEventListener('click', async () => {
+      await window.ClassLogOffline.lockSession();
       try {
-        await apiRequest('/api/auth/logout', { method: 'POST' });
+        await apiRequest('/api/auth/logout', { method: 'POST', timeoutMs: 3000 });
       } catch {
         // Continue logout flow.
       }
-      clearDraft();
       navigate('login');
     });
   }
@@ -1970,13 +2395,14 @@ function bindEvents() {
       if (elements.loginHint) elements.loginHint.textContent = 'Entrando...';
 
       try {
-        await apiRequest('/api/auth/login', {
+        const response = await apiRequest('/api/auth/login', {
           method: 'POST',
           body: JSON.stringify({
             username: elements.loginUsername ? elements.loginUsername.value.trim() : '',
             password: elements.loginPassword ? elements.loginPassword.value : '',
           }),
         });
+        await primeOfflineAccess(response.user);
         window.location.href = getPageNextRedirect();
       } catch (error) {
         if (elements.loginHint) {
@@ -2016,15 +2442,17 @@ async function initPage() {
     return;
   }
 
-  if (state.page === 'settings' && !canManageSettings()) {
+  if (state.page === 'settings' && (!canManageSettings() || state.isOfflineSession || !navigator.onLine)) {
     navigate('students');
     return;
   }
 
-  loadDraft();
   await loadContext();
+  await migrateLegacyDraft();
+  await loadDraft();
   await loadReports();
   await loadDisciplinaryActions();
+  await refreshPendingCount();
 
   if (!state.dateTime) {
     state.dateTime = getCurrentDateTimeLocal();
@@ -2037,6 +2465,7 @@ async function initPage() {
 
   syncAuthUi();
   bindEvents();
+  setupAutomaticSync();
   renderAll();
   updatePageState();
 
@@ -2044,6 +2473,8 @@ async function initPage() {
     await autoPrefillFinalizeContext();
     renderAll();
   }
+
+  synchronizePendingReports();
 }
 
 initPage();

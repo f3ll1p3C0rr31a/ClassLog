@@ -58,6 +58,14 @@ Arquivos incluídos para mobile/PWA:
 - `manifest.webmanifest`
 - `service-worker.js`
 
+## Uso com internet instável
+- Após um login online, o fluxo principal funciona offline por até 7 dias.
+- Logs e registros de diário são salvos primeiro no aparelho e sincronizados automaticamente.
+- Fotos são comprimidas e preservadas no IndexedDB enquanto aguardam envio.
+- O histórico dos últimos 30 dias fica disponível para consulta offline.
+- Edição, comentários, exclusão, configurações e momento disciplinar exigem conexão.
+- Ao sair, os dados locais permanecem bloqueados até um novo login online.
+
 ## Observações importantes
 - O histórico agora é salvo no servidor local em `data/classlog-db.json`.
 - A autenticação usa sessão por cookie no servidor.

@@ -554,6 +554,25 @@ input[type='file'] {
   flex-wrap: wrap;
 }
 
+.sync-status {
+  border: 1px solid transparent;
+}
+
+.sync-status[data-status='offline'],
+.sync-status[data-status='pending'] {
+  background: rgba(255, 212, 71, 0.2);
+  border-color: rgba(151, 113, 0, 0.24);
+}
+
+.sync-status[data-status='syncing'] {
+  background: rgba(15, 78, 168, 0.1);
+}
+
+.sync-status[data-status='error'] {
+  background: rgba(164, 66, 56, 0.1);
+  color: var(--danger);
+}
+
 .history-filter-grid {
   display: grid;
   gap: 14px;
@@ -580,6 +599,16 @@ input[type='file'] {
 .record-card.is-deleted {
   background: rgba(255, 245, 244, 0.96);
   border-color: rgba(164, 66, 56, 0.2);
+}
+
+.record-status[data-sync-state='pending'] {
+  background: rgba(255, 212, 71, 0.25);
+  color: #6b5100;
+}
+
+.record-status[data-sync-state='error'] {
+  background: rgba(164, 66, 56, 0.1);
+  color: var(--danger);
 }
 
 .record-topline {

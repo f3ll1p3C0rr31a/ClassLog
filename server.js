@@ -628,6 +628,7 @@ function sanitizeReport(report) {
   const occurrenceTypes = normalizeOccurrenceTypes(report.occurrenceTypes, report.occurrenceLabel);
   return {
     id: report.id,
+    clientRequestId: String(report.clientRequestId || '').trim() || null,
     schoolId: report.schoolId || null,
     createdBy: report.createdBy || null,
     createdByName: report.createdByName || null,
@@ -736,6 +737,7 @@ async function createReport(req, res, body, user) {
   const occurrenceTypes = normalizeOccurrenceTypes(body.occurrenceTypes, body.occurrenceLabel);
   const occurredAt = String(body.occurredAt || '').trim() || nowIso();
   const schoolId = String(body.schoolId || getDefaultSchoolIdForUser(user) || '').trim();
+  const clientRequestId = String(body.clientRequestId || '').trim();
 
   if (selectedStudents.length === 0) {
     sendJson(res, 400, { error: 'missing_students' });
@@ -752,9 +754,22 @@ async function createReport(req, res, body, user) {
     return;
   }
 
+  if (clientRequestId) {
+    const existing = database.reports.find((entry) => (
+      entry.clientRequestId === clientRequestId
+      && entry.createdBy === user.username
+      && entry.schoolId === schoolId
+    ));
+    if (existing) {
+      sendJson(res, 200, { report: sanitizeReport(existing), duplicate: true });
+      return;
+    }
+  }
+
   const timestamp = nowIso();
   const report = sanitizeReport({
     id: crypto.randomUUID(),
+    clientRequestId,
     schoolId,
     createdBy: user.username,
     createdByName: user.displayName,
@@ -1144,8 +1159,14 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/reports' && req.method === 'GET') {
     const allowed = new Set(getUserSchoolIds(user));
+    const requestedDays = Number(url.searchParams.get('days'));
+    const days = Number.isFinite(requestedDays) && requestedDays > 0
+      ? Math.min(365, Math.floor(requestedDays))
+      : null;
+    const cutoff = days ? Date.now() - (days * 24 * 60 * 60 * 1000) : null;
     const ordered = [...database.reports]
       .filter((report) => allowed.has(report.schoolId))
+      .filter((report) => !cutoff || new Date(report.occurredAt || report.createdAt).getTime() >= cutoff)
       .map((report) => sanitizeReport(report))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     sendJson(res, 200, { reports: ordered });
@@ -1202,10 +1223,6 @@ async function serveFile(res, filePath) {
   }
 }
 
-function shouldProtectHtml(pathname) {
-  return pathname.endsWith('.html') || pathname === '/';
-}
-
 async function serveApp(req, res) {
   const url = getRequestUrl(req);
   const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
@@ -1220,16 +1237,6 @@ async function serveApp(req, res) {
 
   if (url.pathname.startsWith('/api/')) {
     await handleApi(req, res, url);
-    return;
-  }
-
-  if (pathname === '/login.html' && authUser) {
-    redirect(res, '/index.html');
-    return;
-  }
-
-  if (shouldProtectHtml(pathname) && pathname !== '/login.html' && !authUser) {
-    redirect(res, `/login.html?next=${encodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)}`);
     return;
   }
 
