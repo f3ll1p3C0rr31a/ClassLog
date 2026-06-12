@@ -10,6 +10,11 @@ const DB_FILE = path.join(DATA_DIR, 'classlog-db.json');
 const PORT = Number(process.env.PORT || 3000);
 const SESSION_COOKIE = 'classlog_session';
 const SESSION_SECRET = process.env.CLASSLOG_SECRET || 'classlog-dev-secret';
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const ALLOWED_CORS_ORIGINS = new Set([
+  'https://localhost',
+  'capacitor://localhost',
+]);
 const DEFAULT_USERNAME = process.env.CLASSLOG_USERNAME || 'coordenacao';
 const DEFAULT_PASSWORD = process.env.CLASSLOG_PASSWORD || 'ClassLog@2026';
 const DEFAULT_DISPLAY_NAME = process.env.CLASSLOG_DISPLAY_NAME || 'Coordenação';
@@ -28,6 +33,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
@@ -190,7 +196,16 @@ function verifySession(token) {
 
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return typeof data.username === 'string' ? data.username : null;
+    const issuedAt = Date.parse(data.issuedAt);
+    if (
+      typeof data.username !== 'string'
+      || !Number.isFinite(issuedAt)
+      || issuedAt > Date.now()
+      || Date.now() - issuedAt > SESSION_MAX_AGE_MS
+    ) {
+      return null;
+    }
+    return data.username;
   } catch {
     return null;
   }
@@ -466,8 +481,10 @@ async function persistDatabase() {
 }
 
 function getUserFromRequest(req) {
+  const authorization = String(req.headers.authorization || '');
+  const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
   const cookies = parseCookies(req.headers.cookie);
-  const username = verifySession(cookies[SESSION_COOKIE]);
+  const username = verifySession(bearerToken) || verifySession(cookies[SESSION_COOKIE]);
   if (!username) {
     return null;
   }
@@ -645,6 +662,8 @@ function sanitizeReport(report) {
     notes: String(report.notes || '').trim(),
     location: report.location || null,
     photoDataUrl: report.photoDataUrl || '',
+    handwritingData: normalizeHandwritingData(report.handwritingData),
+    handwritingPreviewDataUrl: String(report.handwritingPreviewDataUrl || ''),
     status: report.status || 'aberta',
     deletedAt: report.deletedAt || null,
     deletedBy: report.deletedBy || null,
@@ -652,6 +671,28 @@ function sanitizeReport(report) {
     deletedReason: report.deletedReason || '',
     comments: normalizeComments(report.comments),
     auditTrail: normalizeAuditTrail(report.auditTrail),
+  };
+}
+
+function normalizeHandwritingData(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.strokes)) return null;
+  return {
+    version: 1,
+    width: Math.max(1, Number(value.width) || 1600),
+    height: Math.max(1, Number(value.height) || 1000),
+    updatedAt: value.updatedAt || nowIso(),
+    strokes: value.strokes.slice(0, 5000).map((stroke) => ({
+      tool: ['pen', 'highlighter', 'eraser'].includes(stroke?.tool) ? stroke.tool : 'pen',
+      color: String(stroke?.color || '#132f45').slice(0, 32),
+      width: Math.min(64, Math.max(1, Number(stroke?.width) || 5)),
+      points: Array.isArray(stroke?.points)
+        ? stroke.points.slice(0, 20000).map((point) => ({
+          x: Number(point?.x) || 0,
+          y: Number(point?.y) || 0,
+          pressure: Math.min(1, Math.max(0.1, Number(point?.pressure) || 0.5)),
+        }))
+        : [],
+    })).filter((stroke) => stroke.points.length > 0),
   };
 }
 
@@ -669,6 +710,8 @@ function buildChanges(previousReport, nextReport) {
     'occurredAt',
     'location',
     'photoDataUrl',
+    'handwritingData',
+    'handwritingPreviewDataUrl',
     'status',
     'deletedAt',
     'deletedReason',
@@ -703,6 +746,8 @@ async function handleLogin(req, res, body) {
   }
 
   const token = signSession(user.username);
+  const nativeOrigin = String(req.headers.origin || '');
+  const isNativeRequest = ALLOWED_CORS_ORIGINS.has(nativeOrigin);
   sendJson(
     res,
     200,
@@ -714,6 +759,7 @@ async function handleLogin(req, res, body) {
         role: user.role,
         schoolIds: getUserSchoolIds(user),
       },
+      ...(isNativeRequest ? { token } : {}),
     },
     {
       'Set-Cookie': `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`,
@@ -786,6 +832,8 @@ async function createReport(req, res, body, user) {
     notes: String(body.notes || '').trim(),
     location: body.location || null,
     photoDataUrl: String(body.photoDataUrl || ''),
+    handwritingData: normalizeHandwritingData(body.handwritingData),
+    handwritingPreviewDataUrl: String(body.handwritingPreviewDataUrl || ''),
     status: 'aberta',
     comments: [],
     auditTrail: [],
@@ -829,6 +877,10 @@ async function updateReport(req, res, body, user, reportId) {
     occurredAt: String(body.occurredAt ?? report.occurredAt).trim() || report.occurredAt,
     location: body.location === undefined ? report.location : body.location,
     photoDataUrl: body.photoDataUrl === undefined ? report.photoDataUrl : String(body.photoDataUrl || ''),
+    handwritingData: body.handwritingData === undefined ? report.handwritingData : normalizeHandwritingData(body.handwritingData),
+    handwritingPreviewDataUrl: body.handwritingPreviewDataUrl === undefined
+      ? report.handwritingPreviewDataUrl
+      : String(body.handwritingPreviewDataUrl || ''),
     status: String((body.status ?? report.status) || 'aberta').trim() || 'aberta',
     updatedAt: nowIso(),
     updatedBy: user.username,
@@ -1224,6 +1276,19 @@ async function serveFile(res, filePath) {
 }
 
 async function serveApp(req, res) {
+  const origin = String(req.headers.origin || '');
+  if (ALLOWED_CORS_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(ALLOWED_CORS_ORIGINS.has(origin) ? 204 : 403);
+    res.end();
+    return;
+  }
+
   const url = getRequestUrl(req);
   const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
   const filePath = path.join(ROOT, pathname.replace(/^\/+/, ''));

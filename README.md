@@ -9,6 +9,7 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 - Registro de data da ocorrência.
 - Captura de localização pelo navegador.
 - Anexo de foto pela câmera ou galeria.
+- Anotação manuscrita editável com S Pen e Apple Pencil.
 - Histórico filtrado por aluno ou visão geral.
 - Troca automática de escola por horário.
 - Configuração por escola (cores, horário, ocorrências e políticas).
@@ -47,16 +48,31 @@ Protótipo mobile-first para registrar ocorrências escolares rapidamente, agora
 - Se você adicionar mais dias para o mesmo aluno, a contagem é estendida em cima do prazo atual.
 - Alunos com prazo ativo aparecem destacados em vermelho na lista.
 
-## Preparação para Android e iOS
+## Aplicativo Android
 1. Instale dependências: `npm install`.
-2. Sincronize o projeto web para Capacitor: `npm run mobile:sync`.
-3. Abrir Android Studio: `npm run mobile:android`.
-4. Abrir Xcode (macOS): `npm run mobile:ios`.
+2. Instale o Android Studio com JDK, SDK Platform 35 e Build Tools.
+3. Prepare e sincronize o projeto: `npm run mobile:sync`.
+4. Abra no Android Studio: `npm run mobile:android`.
+5. Teste o APK debug no Galaxy por USB.
+6. Gere o AAB assinado em `Build > Generate Signed Bundle / APK`.
+
+O projeto Android está em `android/`, usa o identificador definitivo
+`com.classlog.app` e aponta a API nativa para
+`https://classlog.fellipecorreia.com`. O navegador continua usando URLs
+relativas e sessão por cookie; o aplicativo usa token Bearer.
+
+Antes de uma nova versão:
+- incremente `versionCode` em `android/app/build.gradle`;
+- atualize `versionName` para versões funcionais;
+- execute `npm run mobile:assets` se os ícones ou a splash mudarem;
+- execute `npm run mobile:sync` antes de compilar.
 
 Arquivos incluídos para mobile/PWA:
 - `capacitor.config.json`
 - `manifest.webmanifest`
 - `service-worker.js`
+- `www/`, contendo apenas os arquivos web permitidos no APK
+- `assets/`, com as fontes do ícone e da splash
 
 ## Uso com internet instável
 - Após um login online, o fluxo principal funciona offline por até 7 dias.
@@ -68,7 +84,7 @@ Arquivos incluídos para mobile/PWA:
 
 ## Observações importantes
 - O histórico agora é salvo no servidor local em `data/classlog-db.json`.
-- A autenticação usa sessão por cookie no servidor.
+- A autenticação usa cookie no site e token Bearer no aplicativo Android.
 - Fotos continuam sendo armazenadas como `data URL` no registro, então o limite depende do navegador e do banco JSON.
 - Para uso oficial em produção, o próximo passo recomendado é trocar o JSON por um banco relacional e revisar as permissões por perfil.
 
