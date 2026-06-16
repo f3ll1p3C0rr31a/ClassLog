@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classlog-static-v8';
+const CACHE_NAME = 'classlog-static-v9';
 const OFFLINE_DB_NAME = 'classlog-offline';
 const OFFLINE_DB_VERSION = 2;
 const ASSETS = [

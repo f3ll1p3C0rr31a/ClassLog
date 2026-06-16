@@ -176,7 +176,7 @@ const storageKeys = {
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
-const appVersion = '1.3.0';
+const appVersion = '1.3.1';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;

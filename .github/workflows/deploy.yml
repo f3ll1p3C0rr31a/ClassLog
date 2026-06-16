@@ -4,34 +4,35 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: classlog-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    name: Deploy production on Jupiter
+    runs-on: [self-hosted, linux, x64, classlog-jupiter]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.CLASSLOG_DEPLOY_HOST }}
-          username: ${{ secrets.CLASSLOG_DEPLOY_USER }}
-          key: ${{ secrets.CLASSLOG_DEPLOY_KEY }}
-          port: ${{ secrets.CLASSLOG_DEPLOY_PORT }}
-          source: "package.json,server.js,app.js,styles.css,offline-store.js,handwriting.js,index.html,occurrence.html,finalize.html,history.html,login.html,settings.html,privacy.html,manifest.webmanifest,service-worker.js,icons/*,capacitor.config.json,README.md"
-          target: ${{ secrets.CLASSLOG_DEPLOY_PATH }}
-          overwrite: true
+      - name: Validate JavaScript
+        run: |
+          node --check server.js
+          node --check app.js
+          node --check offline-store.js
+          node --check handwriting.js
+          node --check service-worker.js
+          node --check scripts/prepare-web-assets.js
 
-      - name: Restart ClassLog container
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.CLASSLOG_DEPLOY_HOST }}
-          username: ${{ secrets.CLASSLOG_DEPLOY_USER }}
-          key: ${{ secrets.CLASSLOG_DEPLOY_KEY }}
-          port: ${{ secrets.CLASSLOG_DEPLOY_PORT }}
-          script: |
-            set -e
-            mkdir -p "${{ secrets.CLASSLOG_DEPLOY_PATH }}"
-            docker restart classlog-api
+      - name: Prepare PWA assets
+        run: npm run web:prepare
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+      - name: Deploy to classlog-api
+        run: bash scripts/deploy-production.sh

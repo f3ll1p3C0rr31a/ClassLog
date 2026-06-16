@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || 3000);
 const SESSION_COOKIE = 'classlog_session';
 const SESSION_SECRET = process.env.CLASSLOG_SECRET || 'classlog-dev-secret';
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const SCHOOL_TIME_ZONE = process.env.CLASSLOG_TIME_ZONE || 'America/Sao_Paulo';
 const ALLOWED_CORS_ORIGINS = new Set([
   'https://localhost',
   'capacitor://localhost',
@@ -228,14 +229,32 @@ function parseTimeToMinutes(value) {
   return (hh * 60) + mm;
 }
 
-function getCurrentMinutes() {
-  const now = new Date();
-  return (now.getHours() * 60) + now.getMinutes();
+function getCurrentMinutes(dateInput = new Date(), timeZone = SCHOOL_TIME_ZONE) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(dateInput).reduce((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+    const hours = Number(parts.hour);
+    const minutes = Number(parts.minute);
+    if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+      return (hours * 60) + minutes;
+    }
+  } catch {
+    // Fall back to the runtime local time if the configured timezone is invalid.
+  }
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  return (date.getHours() * 60) + date.getMinutes();
 }
 
-function detectActiveSchoolId(settings) {
+function detectActiveSchoolId(settings, dateInput = new Date()) {
   const schools = Array.isArray(settings?.schools) ? settings.schools : [];
-  const currentMinutes = getCurrentMinutes();
+  const currentMinutes = getCurrentMinutes(dateInput);
 
   for (const school of schools) {
     const start = parseTimeToMinutes(school?.schedule?.start);
@@ -1340,7 +1359,15 @@ async function main() {
   });
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  detectActiveSchoolId,
+  getCurrentMinutes,
+  parseTimeToMinutes,
+};
