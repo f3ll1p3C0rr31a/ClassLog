@@ -188,8 +188,21 @@ const pageMap = {
   occurrence: 'occurrence.html',
   finalize: 'finalize.html',
   history: 'history.html',
+  grades: 'grades.html',
   settings: 'settings.html',
 };
+
+const mentionScale = {
+  ND: 0,
+  EP: 3,
+  A: 5,
+  AL: 7,
+  AE: 9,
+};
+const mentionOrder = ['ND', 'EP', 'A', 'AL', 'AE'];
+const activityOccurrenceTypes = ['Não fez atividade', 'Não copiou'];
+const positiveOccurrenceTypes = ['Ocorrência Positiva'];
+const nonBehaviorOccurrenceTypes = [...activityOccurrenceTypes, ...positiveOccurrenceTypes];
 
 const state = {
   page: document.body.dataset.page || 'students',
@@ -209,6 +222,12 @@ const state = {
   location: null,
   reports: [],
   disciplinaryActions: [],
+  gradeRecords: [],
+  gradeFilters: {
+    classKey: '',
+    termKey: '',
+    query: '',
+  },
   historyMode: 'selected',
   historyFilters: {
     student: '',
@@ -317,6 +336,13 @@ const elements = {
   disciplinaryButton: $('disciplinaryButton'),
   disciplinaryHint: $('disciplinaryHint'),
   disciplinaryList: $('disciplinaryList'),
+  gradesPanel: $('gradesPanel'),
+  gradesClassSelect: $('gradesClassSelect'),
+  gradesTermSelect: $('gradesTermSelect'),
+  gradesSearch: $('gradesSearch'),
+  gradesRefreshButton: $('gradesRefreshButton'),
+  gradesHint: $('gradesHint'),
+  gradesTableBody: $('gradesTableBody'),
   settingsPanel: $('settingsPanel'),
   settingsSchoolSelect: $('settingsSchoolSelect'),
   settingsStart: $('settingsStart'),
@@ -360,6 +386,10 @@ function formatDateTime(value) {
 
 function canManageSettings() {
   return Boolean(state.authUser && ['coordinator', 'admin'].includes(state.authUser.role));
+}
+
+function canEditGrades() {
+  return canManageSettings() && !state.isOfflineSession && navigator.onLine;
 }
 
 function getPageNextRedirect() {
@@ -416,6 +446,31 @@ function getClassGroupsForSchool(schoolId) {
 
 function getCurrentClassGroups() {
   return getClassGroupsForSchool(state.selectedSchoolId);
+}
+
+function getDefaultTermKey(date = new Date()) {
+  const year = date.getFullYear();
+  const bimester = Math.min(4, Math.max(1, Math.floor(date.getMonth() / 3) + 1));
+  return `${year}-b${bimester}`;
+}
+
+function getTermOptions() {
+  const year = new Date().getFullYear();
+  return [1, 2, 3, 4].map((bimester) => ({
+    value: `${year}-b${bimester}`,
+    label: `${bimester}º Bimestre ${year}`,
+  }));
+}
+
+function getTermDateRange(termKey) {
+  const match = String(termKey || '').match(/^(\d{4})-b([1-4])$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const bimester = Number(match[2]);
+  const startMonth = (bimester - 1) * 3;
+  const start = new Date(year, startMonth, 1);
+  const end = new Date(year, startMonth + 3, 1);
+  return { start, end };
 }
 
 function getOccurrenceTypes() {
@@ -481,6 +536,12 @@ function rebuildSchoolDependentState() {
   const classKeys = new Set(classes.map((group) => group.key));
   if (!classKeys.has(state.selectedClass)) {
     state.selectedClass = classes[0]?.key || '';
+  }
+  if (!classKeys.has(state.gradeFilters.classKey)) {
+    state.gradeFilters.classKey = state.selectedClass || classes[0]?.key || '';
+  }
+  if (!state.gradeFilters.termKey) {
+    state.gradeFilters.termKey = getDefaultTermKey();
   }
 
   const studentsByName = getStudentMap();
@@ -629,7 +690,8 @@ async function loadReports() {
   }
 
   try {
-    const response = await apiRequest('/api/reports?days=30', { method: 'GET', timeoutMs: 5000 });
+    const reportsPath = state.page === 'grades' ? '/api/reports' : '/api/reports?days=30';
+    const response = await apiRequest(reportsPath, { method: 'GET', timeoutMs: 5000 });
     const serverReports = Array.isArray(response.reports) ? response.reports : [];
     const scope = getOfflineScope();
     const pending = await window.ClassLogOffline.getQueue(scope);
@@ -725,6 +787,30 @@ async function loadDraft() {
   if (state.isOfflineSession || !navigator.onLine) {
     state.disciplinaryActions = [];
     return;
+  }
+}
+
+async function loadGradeRecords() {
+  if (state.page !== 'grades' || !state.selectedSchoolId) {
+    state.gradeRecords = [];
+    return;
+  }
+
+  if (state.isOfflineSession || !navigator.onLine) {
+    state.gradeRecords = [];
+    return;
+  }
+
+  const classKey = state.gradeFilters.classKey || state.selectedClass;
+  const termKey = state.gradeFilters.termKey || getDefaultTermKey();
+  try {
+    const response = await apiRequest(
+      `/api/grade-records?schoolId=${encodeURIComponent(state.selectedSchoolId)}&classKey=${encodeURIComponent(classKey)}&termKey=${encodeURIComponent(termKey)}`,
+      { method: 'GET' },
+    );
+    state.gradeRecords = Array.isArray(response.records) ? response.records : [];
+  } catch {
+    state.gradeRecords = [];
   }
 }
 
@@ -863,6 +949,7 @@ function updateHeader() {
     occurrence: ['Etapa 2', `Tipo de Log - ${schoolName}`, 'Selecione uma ou mais ocorrências ou use o Registro de Diário.'],
     finalize: ['Etapa 3', `Informações - ${schoolName}`, 'Revise data, local, foto e observação antes de salvar.'],
     history: ['Histórico', `Logs - ${schoolName}`, 'Filtre os registros por aluno, data, tipo e turma.'],
+    grades: ['Menções', `Notas - ${schoolName}`, 'Acompanhe cálculo automático, ajustes manuais e fechamento bimestral.'],
     settings: ['Configurações', 'Painel da coordenação', 'Ajuste regras e visual por escola.'],
   };
 
@@ -1280,6 +1367,345 @@ function getFilteredReports() {
     filtered = filtered.filter((report) => (report.recordKind || 'occurrence') === filters.recordKind);
   }
   return filtered;
+}
+
+function mentionFromPoints(points) {
+  if (points <= 0) return 'ND';
+  if (points < 5) return 'EP';
+  if (points <= 5) return 'A';
+  if (points <= 8) return 'AL';
+  return 'AE';
+}
+
+function mentionFromAverage(points) {
+  if (points <= 0) return 'ND';
+  if (points < 5) return 'EP';
+  if (points < 6) return 'A';
+  if (points < 9) return 'AL';
+  return 'AE';
+}
+
+function bestMention(primary, recovery) {
+  const primaryMention = normalizeMentionClient(primary);
+  const recoveryMention = normalizeMentionClient(recovery);
+  if (!primaryMention) return recoveryMention;
+  if (!recoveryMention) return primaryMention;
+  return mentionScale[recoveryMention] > mentionScale[primaryMention] ? recoveryMention : primaryMention;
+}
+
+function normalizeMentionClient(value) {
+  const mention = String(value || '').trim().toUpperCase();
+  return mentionOrder.includes(mention) ? mention : '';
+}
+
+function getGradeRecord(studentFullName) {
+  return state.gradeRecords.find((record) => (
+    record.schoolId === state.selectedSchoolId
+    && record.classKey === state.gradeFilters.classKey
+    && record.studentFullName === studentFullName
+    && record.termKey === state.gradeFilters.termKey
+  )) || null;
+}
+
+function getTermReportsForStudent(studentFullName) {
+  const range = getTermDateRange(state.gradeFilters.termKey);
+  return state.reports.filter((report) => {
+    if (report.deletedAt) return false;
+    if (report.schoolId && report.schoolId !== state.selectedSchoolId) return false;
+    const occurredAt = new Date(report.occurredAt || report.createdAt);
+    if (range && (occurredAt < range.start || occurredAt >= range.end)) return false;
+    return (report.selectedStudents || []).some((student) => student.fullName === studentFullName);
+  });
+}
+
+function countMatchingOccurrences(reports, predicate) {
+  return reports.reduce((total, report) => {
+    const types = report.recordKind === 'daily' ? [] : (report.occurrenceTypes || [report.occurrenceLabel]);
+    return total + types.filter((type) => predicate(String(type || ''))).length;
+  }, 0);
+}
+
+function calculateStudentGrades(student) {
+  const reports = getTermReportsForStudent(student.fullName);
+  const record = getGradeRecord(student.fullName);
+  const activityDeductions = countMatchingOccurrences(reports, (type) => activityOccurrenceTypes.includes(type));
+  const positiveOccurrences = countMatchingOccurrences(reports, (type) => positiveOccurrenceTypes.includes(type));
+  const behaviorDeductions = countMatchingOccurrences(reports, (type) => (
+    !nonBehaviorOccurrenceTypes.includes(type)
+  ));
+  const activityPoints = Math.max(0, 5 - activityDeductions);
+  const behaviorPoints = Math.min(10, Math.max(0, 5 - behaviorDeductions + positiveOccurrences));
+
+  const automatic = {
+    activity: mentionFromPoints(activityPoints),
+    behavior: mentionFromPoints(behaviorPoints),
+    values: 'A',
+  };
+
+  const ab = bestMention(record?.formalAssessments?.ab, record?.formalAssessments?.abRecovery);
+  const ai = bestMention(record?.formalAssessments?.ai, record?.formalAssessments?.aiRecovery);
+  const formalAverage = ab && ai
+    ? mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2)
+    : ab || ai || 'A';
+  automatic.formal = formalAverage;
+
+  const finalMentions = {
+    activity: normalizeMentionClient(record?.overrides?.activity) || automatic.activity,
+    behavior: normalizeMentionClient(record?.overrides?.behavior) || automatic.behavior,
+    values: normalizeMentionClient(record?.overrides?.values) || automatic.values,
+    formal: normalizeMentionClient(record?.overrides?.formal) || automatic.formal,
+  };
+
+  const behaviorValuesAverage = (mentionScale[finalMentions.behavior] + mentionScale[finalMentions.values]) / 2;
+  const finalAverage = (
+    mentionScale[finalMentions.activity]
+    + behaviorValuesAverage
+    + mentionScale[finalMentions.formal]
+  ) / 3;
+  const automaticFinal = mentionFromAverage(finalAverage);
+  finalMentions.final = normalizeMentionClient(record?.overrides?.final) || automaticFinal;
+  const automaticStatus = ['ND', 'EP'].includes(finalMentions.final) ? 'failed' : 'approved';
+  const status = record?.statusOverride || automaticStatus;
+
+  return {
+    automatic,
+    finalMentions,
+    formalAssessments: record?.formalAssessments || {},
+    status,
+    automaticStatus,
+    notes: record?.notes || '',
+    activityDeductions,
+    behaviorDeductions,
+    positiveOccurrences,
+  };
+}
+
+function createMentionSelect(value, automaticValue, onChange) {
+  const select = document.createElement('select');
+  select.className = 'grade-select';
+  select.disabled = !canEditGrades();
+  const auto = document.createElement('option');
+  auto.value = '';
+  auto.textContent = `Auto (${automaticValue})`;
+  select.appendChild(auto);
+  mentionOrder.forEach((mention) => {
+    const option = document.createElement('option');
+    option.value = mention;
+    option.textContent = mention;
+    select.appendChild(option);
+  });
+  select.value = normalizeMentionClient(value);
+  select.addEventListener('change', onChange);
+  return select;
+}
+
+function createFormalSelect(value, onChange) {
+  const select = document.createElement('select');
+  select.className = 'grade-select compact';
+  select.disabled = !canEditGrades();
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '--';
+  select.appendChild(empty);
+  mentionOrder.forEach((mention) => {
+    const option = document.createElement('option');
+    option.value = mention;
+    option.textContent = mention;
+    select.appendChild(option);
+  });
+  select.value = normalizeMentionClient(value);
+  select.addEventListener('change', onChange);
+  return select;
+}
+
+async function saveStudentGrade(studentFullName, patch) {
+  if (!canManageSettings() || state.isOfflineSession || !navigator.onLine) {
+    alert('As menções precisam de conexão e acesso da coordenação.');
+    return;
+  }
+
+  const existing = getGradeRecord(studentFullName) || {};
+  const payload = {
+    schoolId: state.selectedSchoolId,
+    classKey: state.gradeFilters.classKey,
+    studentFullName,
+    termKey: state.gradeFilters.termKey,
+    overrides: {
+      ...(existing.overrides || {}),
+      ...(patch.overrides || {}),
+    },
+    formalAssessments: {
+      ...(existing.formalAssessments || {}),
+      ...(patch.formalAssessments || {}),
+    },
+    statusOverride: patch.statusOverride === undefined ? (existing.statusOverride || '') : patch.statusOverride,
+    notes: patch.notes === undefined ? (existing.notes || '') : patch.notes,
+  };
+
+  try {
+    await apiRequest('/api/grade-records', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    await loadGradeRecords();
+    renderGrades();
+  } catch {
+    alert('Não foi possível salvar a menção.');
+  }
+}
+
+function renderGradeControls() {
+  if (!elements.gradesClassSelect || !elements.gradesTermSelect) return;
+
+  elements.gradesClassSelect.innerHTML = '';
+  getCurrentClassGroups().forEach((classGroup) => {
+    const option = document.createElement('option');
+    option.value = classGroup.key;
+    option.textContent = classGroup.label;
+    elements.gradesClassSelect.appendChild(option);
+  });
+  elements.gradesClassSelect.value = state.gradeFilters.classKey || state.selectedClass;
+
+  elements.gradesTermSelect.innerHTML = '';
+  getTermOptions().forEach((term) => {
+    const option = document.createElement('option');
+    option.value = term.value;
+    option.textContent = term.label;
+    elements.gradesTermSelect.appendChild(option);
+  });
+  elements.gradesTermSelect.value = state.gradeFilters.termKey || getDefaultTermKey();
+  if (elements.gradesSearch) elements.gradesSearch.value = state.gradeFilters.query;
+}
+
+function renderGrades() {
+  if (!elements.gradesTableBody) return;
+
+  renderGradeControls();
+  const classGroup = getCurrentClassGroups().find((group) => group.key === state.gradeFilters.classKey) || getCurrentClassGroups()[0];
+  const query = normalizeKey(state.gradeFilters.query);
+  const students = (classGroup?.students || [])
+    .filter((fullName) => !query || normalizeKey(fullName).includes(query))
+    .map((fullName) => getStudentMap().get(fullName))
+    .filter(Boolean);
+
+  elements.gradesTableBody.innerHTML = '';
+  if (elements.gradesHint) {
+    elements.gradesHint.textContent = `${students.length} aluno(s) em ${classGroup?.label || 'turma'} · ${state.gradeFilters.termKey.toUpperCase()}`;
+  }
+
+  if (students.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 9;
+    cell.className = 'hint';
+    cell.textContent = 'Nenhum aluno encontrado.';
+    row.appendChild(cell);
+    elements.gradesTableBody.appendChild(row);
+    return;
+  }
+
+  students.forEach((student) => {
+    const grades = calculateStudentGrades(student);
+    const record = getGradeRecord(student.fullName) || {};
+    const row = document.createElement('tr');
+
+    const nameCell = document.createElement('th');
+    nameCell.scope = 'row';
+    nameCell.innerHTML = `<strong>${student.displayName}</strong><small>${titleCase(student.fullName)}</small>`;
+    row.appendChild(nameCell);
+
+    ['activity', 'behavior', 'values'].forEach((field) => {
+      const cell = document.createElement('td');
+      const auto = document.createElement('span');
+      auto.className = 'grade-auto';
+      auto.textContent = `Calc. ${grades.automatic[field]}`;
+      cell.append(
+        auto,
+        createMentionSelect(record.overrides?.[field], grades.automatic[field], (event) => {
+          saveStudentGrade(student.fullName, { overrides: { [field]: event.target.value } });
+        }),
+      );
+      row.appendChild(cell);
+    });
+
+    const formalCell = document.createElement('td');
+    const formalGrid = document.createElement('div');
+    formalGrid.className = 'formal-grid';
+    [
+      ['ab', 'AB'],
+      ['abRecovery', 'Ret. AB'],
+      ['ai', 'AI'],
+      ['aiRecovery', 'Ret. AI'],
+    ].forEach(([field, label]) => {
+      const wrap = document.createElement('label');
+      wrap.innerHTML = `<span>${label}</span>`;
+      wrap.appendChild(createFormalSelect(grades.formalAssessments[field], (event) => {
+        saveStudentGrade(student.fullName, { formalAssessments: { [field]: event.target.value } });
+      }));
+      formalGrid.appendChild(wrap);
+    });
+    const formalAuto = document.createElement('span');
+    formalAuto.className = 'grade-auto';
+    formalAuto.textContent = `Final formal: ${grades.automatic.formal}`;
+    formalCell.append(
+      formalGrid,
+      formalAuto,
+      createMentionSelect(record.overrides?.formal, grades.automatic.formal, (event) => {
+        saveStudentGrade(student.fullName, { overrides: { formal: event.target.value } });
+      }),
+    );
+    row.appendChild(formalCell);
+
+    const finalCell = document.createElement('td');
+    const finalAuto = document.createElement('span');
+    finalAuto.className = 'grade-auto';
+    finalAuto.textContent = `Calc. ${grades.finalMentions.final}`;
+    finalCell.append(
+      finalAuto,
+      createMentionSelect(record.overrides?.final, grades.finalMentions.final, (event) => {
+        saveStudentGrade(student.fullName, { overrides: { final: event.target.value } });
+      }),
+    );
+    row.appendChild(finalCell);
+
+    const statusCell = document.createElement('td');
+    const statusSelect = document.createElement('select');
+    statusSelect.className = 'grade-select';
+    statusSelect.disabled = !canEditGrades();
+    [
+      ['', `Auto (${grades.automaticStatus === 'approved' ? 'Aprovado' : 'Reprovado'})`],
+      ['approved', 'Aprovado'],
+      ['failed', 'Reprovado'],
+    ].forEach(([value, label]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      statusSelect.appendChild(option);
+    });
+    statusSelect.value = record.statusOverride || '';
+    statusSelect.addEventListener('change', (event) => {
+      saveStudentGrade(student.fullName, { statusOverride: event.target.value });
+    });
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `grade-status ${grades.status}`;
+    statusBadge.textContent = grades.status === 'approved' ? 'Aprovado' : 'Reprovado';
+    statusCell.append(statusBadge, statusSelect);
+    row.appendChild(statusCell);
+
+    const notesCell = document.createElement('td');
+    const notesInput = document.createElement('input');
+    notesInput.type = 'text';
+    notesInput.value = grades.notes;
+    notesInput.placeholder = 'Observação';
+    notesInput.disabled = !canEditGrades();
+    notesInput.addEventListener('change', (event) => {
+      saveStudentGrade(student.fullName, { notes: event.target.value.trim() });
+    });
+    notesCell.appendChild(notesInput);
+    row.appendChild(notesCell);
+
+    elements.gradesTableBody.appendChild(row);
+  });
 }
 
 function renderHandwritingEntry() {
@@ -2266,6 +2692,7 @@ function renderPageSpecificFields() {
   renderHandwritingEntry();
   renderLocation();
   renderHistory();
+  renderGrades();
   renderDisciplinaryPanel();
   fillSettingsForm();
   updatePageState();
@@ -2292,6 +2719,7 @@ async function onSchoolChange(nextSchoolId, manual = true) {
   rebuildSchoolDependentState();
   saveDraft();
   await loadDisciplinaryActions();
+  await loadGradeRecords();
   renderAll();
 }
 
@@ -2468,6 +2896,37 @@ function bindEvents() {
     elements.disciplinaryButton.addEventListener('click', assignDisciplinaryMoment);
   }
 
+  if (elements.gradesClassSelect) {
+    elements.gradesClassSelect.addEventListener('change', async () => {
+      state.gradeFilters.classKey = elements.gradesClassSelect.value;
+      await loadGradeRecords();
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesTermSelect) {
+    elements.gradesTermSelect.addEventListener('change', async () => {
+      state.gradeFilters.termKey = elements.gradesTermSelect.value;
+      await loadGradeRecords();
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesSearch) {
+    elements.gradesSearch.addEventListener('input', () => {
+      state.gradeFilters.query = elements.gradesSearch.value;
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesRefreshButton) {
+    elements.gradesRefreshButton.addEventListener('click', async () => {
+      await loadReports();
+      await loadGradeRecords();
+      renderGrades();
+    });
+  }
+
   if (elements.settingsSchoolSelect) {
     elements.settingsSchoolSelect.addEventListener('change', fillSettingsForm);
   }
@@ -2541,6 +3000,7 @@ async function initPage() {
   await loadDraft();
   await loadReports();
   await loadDisciplinaryActions();
+  await loadGradeRecords();
   await refreshPendingCount();
 
   if (!state.dateTime) {

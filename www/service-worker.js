@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classlog-static-v9';
+const CACHE_NAME = 'classlog-static-v10';
 const OFFLINE_DB_NAME = 'classlog-offline';
 const OFFLINE_DB_VERSION = 2;
 const ASSETS = [
@@ -7,6 +7,7 @@ const ASSETS = [
   '/occurrence.html',
   '/finalize.html',
   '/history.html',
+  '/grades.html',
   '/settings.html',
   '/styles.css',
   '/offline-store.js',

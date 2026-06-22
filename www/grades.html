@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16324f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>ClassLog | Menções</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="grades">
+    <main class="app-shell wide-shell">
+      <section class="hero-card">
+        <div>
+          <p class="eyebrow" id="pageSubtitle">Menções</p>
+          <h1 id="pageTitle">Notas</h1>
+          <p class="hero-copy" id="pageDescription">Acompanhe cálculo automático, ajustes manuais e fechamento bimestral.</p>
+        </div>
+        <div class="hero-actions">
+          <span class="version-badge" id="versionBadge">v1.3.1 · ALPHA</span>
+          <span class="session-label school-badge" id="schoolBadge"></span>
+          <label class="school-picker" for="schoolSelect">
+            <span>Escola</span>
+            <select id="schoolSelect"></select>
+          </label>
+          <span class="session-label" id="schoolSchedule"></span>
+          <span class="session-label" id="authUserLabel"></span>
+          <button class="ghost-button" type="button" id="logoutButton">Sair</button>
+        </div>
+        <div class="hero-stats">
+          <article>
+            <span id="todayCount">0</span>
+            <small>hoje</small>
+          </article>
+          <article>
+            <span id="selectedCount">0</span>
+            <small>selecionados</small>
+          </article>
+          <article>
+            <span id="lastSavedLabel">--</span>
+            <small>último registro</small>
+          </article>
+        </div>
+      </section>
+
+      <nav class="step-nav">
+        <a class="step-link" href="index.html">Alunos</a>
+        <a class="step-link" href="occurrence.html">Log</a>
+        <a class="step-link" href="finalize.html">Informações</a>
+        <a class="step-link" href="history.html">Histórico</a>
+        <a class="step-link active" href="grades.html">Menções</a>
+        <a class="step-link" href="settings.html">Configuração</a>
+      </nav>
+
+      <section class="panel" id="gradesPanel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Bimestre</p>
+            <h2>Painel de menções</h2>
+          </div>
+          <button class="ghost-button" type="button" id="gradesRefreshButton">Atualizar</button>
+        </div>
+
+        <div class="history-filter-grid">
+          <label class="field">
+            <span>Turma</span>
+            <select id="gradesClassSelect"></select>
+          </label>
+          <label class="field">
+            <span>Bimestre</span>
+            <select id="gradesTermSelect"></select>
+          </label>
+          <label class="field">
+            <span>Buscar aluno</span>
+            <input id="gradesSearch" type="search" placeholder="Digite um nome..." />
+          </label>
+        </div>
+        <p class="hint" id="gradesHint">Carregando menções...</p>
+
+        <div class="grades-table-wrap">
+          <table class="grades-table">
+            <thead>
+              <tr>
+                <th>Aluno</th>
+                <th>Atividades</th>
+                <th>Comport.</th>
+                <th>Valores</th>
+                <th>Avaliações formais</th>
+                <th>Final</th>
+                <th>Fechamento</th>
+                <th>Obs.</th>
+              </tr>
+            </thead>
+            <tbody id="gradesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="offline-store.js"></script>
+    <script src="handwriting.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

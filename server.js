@@ -42,11 +42,13 @@ const MIME_TYPES = {
 const FATIMA_OCCURRENCES = [
   'Atraso',
   'Fora de sala',
+  'De pé, andando pela sala.',
   'Não fez atividade',
   'Não copiou',
   'Sem material',
   'Uso indevido do celular',
   'Conversando durante a explicação',
+  'Ocorrência Positiva',
   'Outra',
 ];
 
@@ -56,11 +58,21 @@ const EC303_OCCURRENCES = [
   'Não utilização do uniforme',
   'Roupa inapropriada para a escola',
   'Comportamento inadequado em sala de aula',
+  'De pé, andando pela sala.',
   'Desrespeito com colegas',
   'Desrespeito com equipe escolar',
   'Saída da sala sem autorização',
+  'Ocorrência Positiva',
   'Outra',
 ];
+
+const REQUIRED_OCCURRENCES_BY_SCHOOL = {
+  fatima: ['De pé, andando pela sala.', 'Ocorrência Positiva'],
+  ec303: ['De pé, andando pela sala.', 'Ocorrência Positiva'],
+};
+
+const MENTION_VALUES = ['ND', 'EP', 'A', 'AL', 'AE'];
+const GRADE_STATUS_VALUES = ['approved', 'failed'];
 
 let database = null;
 
@@ -366,6 +378,11 @@ function countBusinessDaysInclusive(startDateOnly, endDateOnly, holidaysSet) {
 
 function normalizeSchool(entry, fallback) {
   const defaultSchool = fallback || {};
+  const occurrenceTypes = Array.isArray(entry?.occurrenceTypes) && entry.occurrenceTypes.length > 0
+    ? entry.occurrenceTypes.map((value) => String(value || '').trim()).filter(Boolean)
+    : Array.isArray(defaultSchool?.occurrenceTypes) ? defaultSchool.occurrenceTypes : ['Outra'];
+  const requiredOccurrences = REQUIRED_OCCURRENCES_BY_SCHOOL[String(entry?.id || defaultSchool.id || '').trim()] || [];
+
   return {
     id: String(entry?.id || defaultSchool.id || '').trim(),
     name: String(entry?.name || defaultSchool.name || '').trim(),
@@ -380,9 +397,7 @@ function normalizeSchool(entry, fallback) {
       start: String(entry?.schedule?.start || defaultSchool?.schedule?.start || '07:00').trim(),
       end: String(entry?.schedule?.end || defaultSchool?.schedule?.end || '12:00').trim(),
     },
-    occurrenceTypes: Array.isArray(entry?.occurrenceTypes) && entry.occurrenceTypes.length > 0
-      ? entry.occurrenceTypes.map((value) => String(value || '').trim()).filter(Boolean)
-      : Array.isArray(defaultSchool?.occurrenceTypes) ? defaultSchool.occurrenceTypes : ['Outra'],
+    occurrenceTypes: [...new Set([...occurrenceTypes, ...requiredOccurrences])],
     policies: {
       disciplinaryMomentEnabled: Boolean(entry?.policies?.disciplinaryMomentEnabled ?? defaultSchool?.policies?.disciplinaryMomentEnabled),
     },
@@ -442,6 +457,58 @@ function normalizeDisciplinaryActions(actions) {
     .filter((action) => action.schoolId && action.studentFullName && /^\d{4}-\d{2}-\d{2}$/.test(action.startDate) && /^\d{4}-\d{2}-\d{2}$/.test(action.endDate));
 }
 
+function normalizeMention(value) {
+  const mention = String(value || '').trim().toUpperCase();
+  return MENTION_VALUES.includes(mention) ? mention : '';
+}
+
+function normalizeGradeStatus(value) {
+  const status = String(value || '').trim();
+  return GRADE_STATUS_VALUES.includes(status) ? status : '';
+}
+
+function normalizeGradeRecords(records) {
+  if (!Array.isArray(records)) {
+    return [];
+  }
+
+  return records
+    .map((record) => ({
+      id: record.id || crypto.randomUUID(),
+      schoolId: String(record.schoolId || '').trim(),
+      classKey: String(record.classKey || '').trim(),
+      studentFullName: String(record.studentFullName || '').trim(),
+      termKey: String(record.termKey || '').trim(),
+      overrides: {
+        activity: normalizeMention(record.overrides?.activity),
+        behavior: normalizeMention(record.overrides?.behavior),
+        values: normalizeMention(record.overrides?.values),
+        formal: normalizeMention(record.overrides?.formal),
+        final: normalizeMention(record.overrides?.final),
+      },
+      formalAssessments: {
+        ab: normalizeMention(record.formalAssessments?.ab),
+        abRecovery: normalizeMention(record.formalAssessments?.abRecovery),
+        ai: normalizeMention(record.formalAssessments?.ai),
+        aiRecovery: normalizeMention(record.formalAssessments?.aiRecovery),
+      },
+      statusOverride: normalizeGradeStatus(record.statusOverride),
+      notes: String(record.notes || '').trim(),
+      createdAt: record.createdAt || nowIso(),
+      createdBy: record.createdBy || null,
+      createdByName: record.createdByName || null,
+      updatedAt: record.updatedAt || nowIso(),
+      updatedBy: record.updatedBy || null,
+      updatedByName: record.updatedByName || null,
+    }))
+    .filter((record) => (
+      record.schoolId
+      && record.classKey
+      && record.studentFullName
+      && /^[0-9]{4}-b[1-4]$/.test(record.termKey)
+    ));
+}
+
 async function ensureDatabase() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
 
@@ -481,6 +548,7 @@ async function ensureDatabase() {
 
     parsed.settings = normalizeSettings(parsed.settings);
     parsed.disciplinaryActions = normalizeDisciplinaryActions(parsed.disciplinaryActions);
+    parsed.gradeRecords = normalizeGradeRecords(parsed.gradeRecords);
 
     database = parsed;
     await persistDatabase();
@@ -490,6 +558,7 @@ async function ensureDatabase() {
       reports: [],
       settings: createDefaultSettings(),
       disciplinaryActions: [],
+      gradeRecords: [],
     };
     await persistDatabase();
   }
@@ -1148,6 +1217,86 @@ async function saveDisciplinaryAction(req, res, body, user) {
   sendJson(res, 201, { action: sanitizeDisciplinaryAction(action) });
 }
 
+function sanitizeGradeRecord(record) {
+  return normalizeGradeRecords([record])[0] || null;
+}
+
+async function listGradeRecords(res, user, url) {
+  const schoolId = String(url.searchParams.get('schoolId') || '').trim();
+  const classKey = String(url.searchParams.get('classKey') || '').trim();
+  const termKey = String(url.searchParams.get('termKey') || '').trim();
+
+  if (!schoolId || !canAccessSchool(user, schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
+    return;
+  }
+
+  const records = normalizeGradeRecords(database.gradeRecords)
+    .filter((record) => (
+      record.schoolId === schoolId
+      && (!classKey || record.classKey === classKey)
+      && (!termKey || record.termKey === termKey)
+    ));
+
+  sendJson(res, 200, { records });
+}
+
+async function saveGradeRecord(res, body, user) {
+  if (!canCoordinate(user)) {
+    sendJson(res, 403, { error: 'grades_forbidden' });
+    return;
+  }
+
+  const schoolId = String(body.schoolId || '').trim();
+  if (!schoolId || !canAccessSchool(user, schoolId)) {
+    sendJson(res, 403, { error: 'school_forbidden' });
+    return;
+  }
+
+  const incoming = sanitizeGradeRecord({
+    ...body,
+    schoolId,
+    createdAt: nowIso(),
+    createdBy: user.username,
+    createdByName: user.displayName,
+    updatedAt: nowIso(),
+    updatedBy: user.username,
+    updatedByName: user.displayName,
+  });
+
+  if (!incoming) {
+    sendJson(res, 400, { error: 'invalid_grade_record' });
+    return;
+  }
+
+  database.gradeRecords = normalizeGradeRecords(database.gradeRecords);
+  const existing = database.gradeRecords.find((record) => (
+    record.schoolId === incoming.schoolId
+    && record.classKey === incoming.classKey
+    && record.studentFullName === incoming.studentFullName
+    && record.termKey === incoming.termKey
+  ));
+
+  if (existing) {
+    Object.assign(existing, {
+      overrides: incoming.overrides,
+      formalAssessments: incoming.formalAssessments,
+      statusOverride: incoming.statusOverride,
+      notes: incoming.notes,
+      updatedAt: nowIso(),
+      updatedBy: user.username,
+      updatedByName: user.displayName,
+    });
+    await persistDatabase();
+    sendJson(res, 200, { record: sanitizeGradeRecord(existing) });
+    return;
+  }
+
+  database.gradeRecords.unshift(incoming);
+  await persistDatabase();
+  sendJson(res, 201, { record: incoming });
+}
+
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/auth/me' && req.method === 'GET') {
     const user = getUserFromRequest(req);
@@ -1225,6 +1374,17 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/disciplinary-actions' && req.method === 'POST') {
     const body = await readJsonBody(req);
     await saveDisciplinaryAction(req, res, body, user);
+    return;
+  }
+
+  if (url.pathname === '/api/grade-records' && req.method === 'GET') {
+    await listGradeRecords(res, user, url);
+    return;
+  }
+
+  if (url.pathname === '/api/grade-records' && req.method === 'PUT') {
+    const body = await readJsonBody(req);
+    await saveGradeRecord(res, body, user);
     return;
   }
 

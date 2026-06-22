@@ -123,6 +123,10 @@ select:focus {
   padding: 18px;
 }
 
+.wide-shell {
+  width: min(100%, 1380px);
+}
+
 .hero-card,
 .panel {
   background: var(--surface);
@@ -984,6 +988,116 @@ body.handwriting-open {
   border-radius: 16px;
 }
 
+.grades-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.grades-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+}
+
+.grades-table th,
+.grades-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.grades-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--school-bg-soft) 72%, white);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.grades-table tbody tr:last-child th,
+.grades-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.grades-table tbody th {
+  width: 180px;
+}
+
+.grades-table tbody th strong,
+.grades-table tbody th small,
+.grade-auto,
+.grade-status {
+  display: block;
+}
+
+.grades-table tbody th small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.grade-auto {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.grade-select {
+  min-width: 112px;
+  min-height: 40px;
+  border-radius: 12px;
+  padding: 0 10px;
+}
+
+.grade-select.compact {
+  min-width: 74px;
+}
+
+.formal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.formal-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.grade-status {
+  width: max-content;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.grade-status.approved {
+  background: rgba(22, 136, 33, 0.12);
+  color: #0b6413;
+}
+
+.grade-status.failed {
+  background: rgba(164, 66, 56, 0.12);
+  color: var(--danger);
+}
+
 @media (min-width: 760px) {
   .history-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -995,7 +1109,7 @@ body.handwriting-open {
   }
 
   .step-nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .grid-two {

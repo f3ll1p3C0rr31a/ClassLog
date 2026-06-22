@@ -19,6 +19,7 @@ FILES=(
   occurrence.html
   finalize.html
   history.html
+  grades.html
   login.html
   settings.html
   privacy.html
