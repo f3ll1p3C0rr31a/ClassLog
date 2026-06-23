@@ -1437,8 +1437,8 @@ function calculateStudentGrades(student) {
   const behaviorPoints = Math.min(10, Math.max(0, 5 - behaviorDeductions + positiveOccurrences));
 
   const automatic = {
-    activity: 'A',
-    behaviorValues: 'A',
+    activity: mentionFromPoints(activityPoints),
+    behaviorValues: mentionFromPoints(behaviorPoints),
   };
 
   const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery);
@@ -1450,9 +1450,11 @@ function calculateStudentGrades(student) {
   automatic.formal = formalAverage;
   automatic.philosophyFormal = mentionFromAverage((mentionScale[philosophyAb] + mentionScale[ai]) / 2);
 
-  const legacyBehavior = normalizeMentionClient(record?.overrides?.behavior) || 'A';
-  const legacyValues = normalizeMentionClient(record?.overrides?.values) || 'A';
-  const legacyBehaviorValues = mentionFromAverage((mentionScale[legacyBehavior] + mentionScale[legacyValues]) / 2);
+  const legacyBehavior = normalizeMentionClient(record?.overrides?.behavior);
+  const legacyValues = normalizeMentionClient(record?.overrides?.values);
+  const legacyBehaviorValues = legacyBehavior || legacyValues
+    ? mentionFromAverage((mentionScale[legacyBehavior || automatic.behaviorValues] + mentionScale[legacyValues || 'A']) / 2)
+    : '';
 
   const finalMentions = {
     activity: normalizeMentionClient(record?.overrides?.activity) || automatic.activity,
@@ -1708,9 +1710,9 @@ function renderGrades() {
     formalGrid.className = 'formal-grid';
     [
       ['ab', 'AB', 'A'],
-      ['abRecovery', 'Ret. AB', ''],
+      ['abRecovery', 'Ret. AB', 'A'],
       ['ai', 'AI', 'A'],
-      ['aiRecovery', 'Ret. AI', ''],
+      ['aiRecovery', 'Ret. AI', 'A'],
     ].forEach(([field, label, defaultMention]) => {
       const wrap = document.createElement('label');
       wrap.innerHTML = `<span>${label}</span>`;
@@ -1759,7 +1761,7 @@ function renderGrades() {
     philosophyRecoveryWrap.innerHTML = '<span>Ret. AB Filo.</span>';
     philosophyRecoveryWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAbRecovery, (event) => {
       saveStudentGrade(student.fullName, { formalAssessments: { philosophyAbRecovery: event.target.value } });
-    }));
+    }, 'A'));
     const sharedAiWrap = document.createElement('div');
     sharedAiWrap.className = 'shared-grade';
     sharedAiWrap.innerHTML = '<span>AI compart.</span>';
