@@ -998,13 +998,13 @@ body.handwriting-open {
 
 .grades-table {
   width: 100%;
-  min-width: 1320px;
+  min-width: 1160px;
   border-collapse: collapse;
 }
 
 .grades-table th,
 .grades-table td {
-  padding: 16px;
+  padding: 14px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -1053,7 +1053,7 @@ body.handwriting-open {
 }
 
 .grade-select {
-  min-width: 132px;
+  min-width: 120px;
   min-height: 44px;
   border-radius: 12px;
   padding: 0 10px;
@@ -1061,7 +1061,7 @@ body.handwriting-open {
 }
 
 .grade-select.compact {
-  min-width: 88px;
+  min-width: 78px;
 }
 
 .formal-grid {
@@ -1084,7 +1084,7 @@ body.handwriting-open {
 
 .philosophy-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(88px, 1fr));
+  grid-template-columns: repeat(3, minmax(78px, 1fr));
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -1107,6 +1107,23 @@ body.handwriting-open {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 900;
+}
+
+.status-control {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.status-control:last-child {
+  margin-bottom: 0;
+}
+
+.status-title {
+  color: var(--accent-dark);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .grade-select[data-mention="A"],

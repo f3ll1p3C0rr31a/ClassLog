@@ -1438,43 +1438,46 @@ function calculateStudentGrades(student) {
 
   const automatic = {
     activity: 'A',
-    behavior: 'A',
-    values: 'A',
+    behaviorValues: 'A',
   };
 
   const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery);
   const ai = bestMention(record?.formalAssessments?.ai || 'A', record?.formalAssessments?.aiRecovery);
-  const philosophyAb = normalizeMentionClient(record?.formalAssessments?.philosophyAb) || 'A';
+  const philosophyAb = bestMention(record?.formalAssessments?.philosophyAb || 'A', record?.formalAssessments?.philosophyAbRecovery);
   const formalAverage = ab && ai
     ? mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2)
     : ab || ai || 'A';
   automatic.formal = formalAverage;
   automatic.philosophyFormal = mentionFromAverage((mentionScale[philosophyAb] + mentionScale[ai]) / 2);
 
+  const legacyBehavior = normalizeMentionClient(record?.overrides?.behavior) || 'A';
+  const legacyValues = normalizeMentionClient(record?.overrides?.values) || 'A';
+  const legacyBehaviorValues = mentionFromAverage((mentionScale[legacyBehavior] + mentionScale[legacyValues]) / 2);
+
   const finalMentions = {
     activity: normalizeMentionClient(record?.overrides?.activity) || automatic.activity,
-    behavior: normalizeMentionClient(record?.overrides?.behavior) || automatic.behavior,
-    values: normalizeMentionClient(record?.overrides?.values) || automatic.values,
+    behaviorValues: normalizeMentionClient(record?.overrides?.behaviorValues) || legacyBehaviorValues || automatic.behaviorValues,
     formal: normalizeMentionClient(record?.overrides?.formal) || automatic.formal,
   };
 
-  const behaviorValuesAverage = (mentionScale[finalMentions.behavior] + mentionScale[finalMentions.values]) / 2;
   const finalAverage = (
     mentionScale[finalMentions.activity]
-    + behaviorValuesAverage
+    + mentionScale[finalMentions.behaviorValues]
     + mentionScale[finalMentions.formal]
   ) / 3;
   const automaticFinal = mentionFromAverage(finalAverage);
   finalMentions.final = normalizeMentionClient(record?.overrides?.final) || automaticFinal;
   const philosophyFinalAverage = (
     mentionScale[finalMentions.activity]
-    + behaviorValuesAverage
+    + mentionScale[finalMentions.behaviorValues]
     + mentionScale[automatic.philosophyFormal]
   ) / 3;
   const automaticPhilosophyFinal = mentionFromAverage(philosophyFinalAverage);
-  finalMentions.philosophyFinal = normalizeMentionClient(record?.overrides?.philosophyFinal) || automaticPhilosophyFinal;
+  finalMentions.philosophyFinal = automaticPhilosophyFinal;
   const automaticStatus = ['ND', 'EP'].includes(finalMentions.final) ? 'failed' : 'approved';
+  const automaticPhilosophyStatus = ['ND', 'EP'].includes(finalMentions.philosophyFinal) ? 'failed' : 'approved';
   const status = record?.statusOverride || automaticStatus;
+  const philosophyStatus = record?.philosophyStatusOverride || automaticPhilosophyStatus;
 
   return {
     automatic,
@@ -1483,6 +1486,8 @@ function calculateStudentGrades(student) {
     philosophyAb,
     status,
     automaticStatus,
+    philosophyStatus,
+    automaticPhilosophyStatus,
     notes: record?.notes || '',
     activityDeductions,
     behaviorDeductions,
@@ -1568,6 +1573,9 @@ async function saveStudentGrade(studentFullName, patch) {
       ...(patch.formalAssessments || {}),
     },
     statusOverride: patch.statusOverride === undefined ? (existing.statusOverride || '') : patch.statusOverride,
+    philosophyStatusOverride: patch.philosophyStatusOverride === undefined
+      ? (existing.philosophyStatusOverride || '')
+      : patch.philosophyStatusOverride,
     notes: patch.notes === undefined ? (existing.notes || '') : patch.notes,
   };
 
@@ -1606,6 +1614,37 @@ function renderGradeControls() {
   if (elements.gradesSearch) elements.gradesSearch.value = state.gradeFilters.query;
 }
 
+function createStatusControl(title, status, automaticStatus, selectedValue, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'status-control';
+  const label = document.createElement('span');
+  label.className = 'status-title';
+  label.textContent = title;
+
+  const select = document.createElement('select');
+  select.className = 'grade-select';
+  select.disabled = !canEditGrades();
+  [
+    ['', `Auto (${automaticStatus === 'approved' ? 'Aprovado' : 'Reprovado'})`],
+    ['approved', 'Aprovado'],
+    ['failed', 'Reprovado'],
+  ].forEach(([value, optionLabel]) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = optionLabel;
+    select.appendChild(option);
+  });
+  select.value = selectedValue || '';
+  select.addEventListener('change', (event) => onChange(event.target.value));
+
+  const badge = document.createElement('span');
+  badge.className = `grade-status ${status}`;
+  badge.textContent = status === 'approved' ? 'Aprovado' : 'Reprovado';
+
+  wrap.append(label, select, badge);
+  return wrap;
+}
+
 function renderGrades() {
   if (!elements.gradesTableBody) return;
 
@@ -1625,7 +1664,7 @@ function renderGrades() {
   if (students.length === 0) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 9;
+    cell.colSpan = 8;
     cell.className = 'hint';
     cell.textContent = 'Nenhum aluno encontrado.';
     row.appendChild(cell);
@@ -1645,9 +1684,8 @@ function renderGrades() {
     row.appendChild(nameCell);
 
     [
-      ['activity', 'Atividades'],
-      ['behavior', 'Comport.'],
-      ['values', 'Valores'],
+      ['activity', 'Atv'],
+      ['behaviorValues', 'CeV'],
     ].forEach(([field, label]) => {
       const cell = document.createElement('td');
       cell.dataset.label = label;
@@ -1665,7 +1703,7 @@ function renderGrades() {
     });
 
     const formalCell = document.createElement('td');
-    formalCell.dataset.label = 'Avaliações formais';
+    formalCell.dataset.label = 'Aval. Hist.';
     const formalGrid = document.createElement('div');
     formalGrid.className = 'formal-grid';
     [
@@ -1709,58 +1747,44 @@ function renderGrades() {
     row.appendChild(finalCell);
 
     const philosophyCell = document.createElement('td');
-    philosophyCell.dataset.label = 'Filosofia';
+    philosophyCell.dataset.label = 'Filo.';
     const philosophyGrid = document.createElement('div');
     philosophyGrid.className = 'philosophy-grid';
     const philosophyAbWrap = document.createElement('label');
-    philosophyAbWrap.innerHTML = '<span>AB Filosofia</span>';
+    philosophyAbWrap.innerHTML = '<span>AB Filo.</span>';
     philosophyAbWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAb, (event) => {
       saveStudentGrade(student.fullName, { formalAssessments: { philosophyAb: event.target.value } });
     }, 'A'));
+    const philosophyRecoveryWrap = document.createElement('label');
+    philosophyRecoveryWrap.innerHTML = '<span>Ret. AB Filo.</span>';
+    philosophyRecoveryWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAbRecovery, (event) => {
+      saveStudentGrade(student.fullName, { formalAssessments: { philosophyAbRecovery: event.target.value } });
+    }));
     const sharedAiWrap = document.createElement('div');
     sharedAiWrap.className = 'shared-grade';
-    sharedAiWrap.innerHTML = '<span>AI compartilhada</span>';
+    sharedAiWrap.innerHTML = '<span>AI compart.</span>';
     const sharedAiValue = document.createElement('strong');
     sharedAiValue.textContent = bestMention(grades.formalAssessments.ai || 'A', grades.formalAssessments.aiRecovery) || 'A';
     applyMentionTone(sharedAiValue, sharedAiValue.textContent);
     sharedAiWrap.appendChild(sharedAiValue);
-    philosophyGrid.append(philosophyAbWrap, sharedAiWrap);
+    philosophyGrid.append(philosophyAbWrap, philosophyRecoveryWrap, sharedAiWrap);
     const philosophyAuto = document.createElement('span');
     philosophyAuto.className = 'grade-auto';
     applyMentionTone(philosophyAuto, grades.finalMentions.philosophyFinal);
     philosophyAuto.textContent = `Calc. ${grades.finalMentions.philosophyFinal}`;
-    philosophyCell.append(
-      philosophyGrid,
-      philosophyAuto,
-      createMentionSelect(record.overrides?.philosophyFinal, grades.finalMentions.philosophyFinal, (event) => {
-        saveStudentGrade(student.fullName, { overrides: { philosophyFinal: event.target.value } });
-      }),
-    );
+    philosophyCell.append(philosophyGrid, philosophyAuto);
     row.appendChild(philosophyCell);
 
     const statusCell = document.createElement('td');
     statusCell.dataset.label = 'Fechamento';
-    const statusSelect = document.createElement('select');
-    statusSelect.className = 'grade-select';
-    statusSelect.disabled = !canEditGrades();
-    [
-      ['', `Auto (${grades.automaticStatus === 'approved' ? 'Aprovado' : 'Reprovado'})`],
-      ['approved', 'Aprovado'],
-      ['failed', 'Reprovado'],
-    ].forEach(([value, label]) => {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      statusSelect.appendChild(option);
-    });
-    statusSelect.value = record.statusOverride || '';
-    statusSelect.addEventListener('change', (event) => {
-      saveStudentGrade(student.fullName, { statusOverride: event.target.value });
-    });
-    const statusBadge = document.createElement('span');
-    statusBadge.className = `grade-status ${grades.status}`;
-    statusBadge.textContent = grades.status === 'approved' ? 'Aprovado' : 'Reprovado';
-    statusCell.append(statusSelect, statusBadge);
+    statusCell.append(
+      createStatusControl('Hist.', grades.status, grades.automaticStatus, record.statusOverride, (value) => {
+        saveStudentGrade(student.fullName, { statusOverride: value });
+      }),
+      createStatusControl('Filo.', grades.philosophyStatus, grades.automaticPhilosophyStatus, record.philosophyStatusOverride, (value) => {
+        saveStudentGrade(student.fullName, { philosophyStatusOverride: value });
+      }),
+    );
     row.appendChild(statusCell);
 
     const notesCell = document.createElement('td');
