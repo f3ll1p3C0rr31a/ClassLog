@@ -124,7 +124,7 @@ select:focus {
 }
 
 .wide-shell {
-  width: min(100%, 1380px);
+  width: min(100%, 1480px);
 }
 
 .hero-card,
@@ -998,13 +998,13 @@ body.handwriting-open {
 
 .grades-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1180px;
   border-collapse: collapse;
 }
 
 .grades-table th,
 .grades-table td {
-  padding: 12px;
+  padding: 16px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -1053,14 +1053,15 @@ body.handwriting-open {
 }
 
 .grade-select {
-  min-width: 112px;
-  min-height: 40px;
+  min-width: 132px;
+  min-height: 44px;
   border-radius: 12px;
   padding: 0 10px;
+  font-weight: 700;
 }
 
 .grade-select.compact {
-  min-width: 74px;
+  min-width: 88px;
 }
 
 .formal-grid {
@@ -1081,11 +1082,52 @@ body.handwriting-open {
 
 .grade-status {
   width: max-content;
-  margin-bottom: 8px;
+  margin-top: 8px;
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 900;
+}
+
+.grade-select[data-mention="A"],
+.grade-auto[data-mention="A"] {
+  border-color: rgba(22, 136, 33, 0.28);
+  background: rgba(22, 136, 33, 0.08);
+  color: #0b6413;
+}
+
+.grade-select[data-mention="EP"],
+.grade-auto[data-mention="EP"] {
+  border-color: rgba(164, 66, 56, 0.3);
+  background: rgba(164, 66, 56, 0.08);
+  color: #a44238;
+}
+
+.grade-select[data-mention="ND"],
+.grade-auto[data-mention="ND"] {
+  border-color: rgba(102, 118, 138, 0.3);
+  background: rgba(102, 118, 138, 0.12);
+  color: #66768a;
+}
+
+.grade-select[data-mention="AL"],
+.grade-auto[data-mention="AL"] {
+  border-color: rgba(15, 78, 168, 0.3);
+  background: rgba(15, 78, 168, 0.08);
+  color: #0f4ea8;
+}
+
+.grade-select[data-mention="AE"],
+.grade-auto[data-mention="AE"] {
+  border-color: rgba(114, 56, 180, 0.3);
+  background: rgba(114, 56, 180, 0.1);
+  color: #7238b4;
+}
+
+.grade-auto[data-mention] {
+  width: max-content;
+  padding: 4px 8px;
+  border-radius: 999px;
 }
 
 .grade-status.approved {
@@ -1138,6 +1180,11 @@ body.handwriting-open {
 }
 
 @media (max-width: 759px) {
+  .app-shell,
+  .wide-shell {
+    padding: 10px;
+  }
+
   .hero-actions {
     justify-content: flex-start;
   }
@@ -1161,6 +1208,72 @@ body.handwriting-open {
 
   .handwriting-toolbar {
     flex-wrap: nowrap;
+  }
+
+  .grades-table-wrap {
+    overflow-x: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .grades-table,
+  .grades-table tbody,
+  .grades-table tr,
+  .grades-table th,
+  .grades-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .grades-table {
+    border-collapse: separate;
+  }
+
+  .grades-table thead {
+    display: none;
+  }
+
+  .grades-table tbody tr {
+    margin-bottom: 14px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .grades-table th,
+  .grades-table td {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .grades-table tbody tr th:last-child,
+  .grades-table tbody tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .grades-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 6px;
+    color: var(--accent-dark);
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .grades-table tbody th {
+    padding-top: 0;
+  }
+
+  .grade-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .formal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

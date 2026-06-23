@@ -1437,13 +1437,13 @@ function calculateStudentGrades(student) {
   const behaviorPoints = Math.min(10, Math.max(0, 5 - behaviorDeductions + positiveOccurrences));
 
   const automatic = {
-    activity: mentionFromPoints(activityPoints),
-    behavior: mentionFromPoints(behaviorPoints),
+    activity: 'A',
+    behavior: 'A',
     values: 'A',
   };
 
-  const ab = bestMention(record?.formalAssessments?.ab, record?.formalAssessments?.abRecovery);
-  const ai = bestMention(record?.formalAssessments?.ai, record?.formalAssessments?.aiRecovery);
+  const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery);
+  const ai = bestMention(record?.formalAssessments?.ai || 'A', record?.formalAssessments?.aiRecovery);
   const formalAverage = ab && ai
     ? mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2)
     : ab || ai || 'A';
@@ -1480,10 +1480,22 @@ function calculateStudentGrades(student) {
   };
 }
 
+function applyMentionTone(element, mention) {
+  if (!element) return element;
+  const normalized = normalizeMentionClient(mention);
+  if (!normalized) {
+    delete element.dataset.mention;
+    return element;
+  }
+  element.dataset.mention = normalized;
+  return element;
+}
+
 function createMentionSelect(value, automaticValue, onChange) {
   const select = document.createElement('select');
   select.className = 'grade-select';
   select.disabled = !canEditGrades();
+  applyMentionTone(select, value || automaticValue || 'A');
   const auto = document.createElement('option');
   auto.value = '';
   auto.textContent = `Auto (${automaticValue})`;
@@ -1495,17 +1507,21 @@ function createMentionSelect(value, automaticValue, onChange) {
     select.appendChild(option);
   });
   select.value = normalizeMentionClient(value);
-  select.addEventListener('change', onChange);
+  select.addEventListener('change', (event) => {
+    applyMentionTone(select, event.target.value || automaticValue || 'A');
+    onChange(event);
+  });
   return select;
 }
 
-function createFormalSelect(value, onChange) {
+function createFormalSelect(value, onChange, defaultMention = '') {
   const select = document.createElement('select');
   select.className = 'grade-select compact';
   select.disabled = !canEditGrades();
+  applyMentionTone(select, value || defaultMention);
   const empty = document.createElement('option');
   empty.value = '';
-  empty.textContent = '--';
+  empty.textContent = defaultMention || '--';
   select.appendChild(empty);
   mentionOrder.forEach((mention) => {
     const option = document.createElement('option');
@@ -1514,7 +1530,10 @@ function createFormalSelect(value, onChange) {
     select.appendChild(option);
   });
   select.value = normalizeMentionClient(value);
-  select.addEventListener('change', onChange);
+  select.addEventListener('change', (event) => {
+    applyMentionTone(select, event.target.value || defaultMention);
+    onChange(event);
+  });
   return select;
 }
 
@@ -1611,13 +1630,20 @@ function renderGrades() {
 
     const nameCell = document.createElement('th');
     nameCell.scope = 'row';
+    nameCell.dataset.label = 'Aluno';
     nameCell.innerHTML = `<strong>${student.displayName}</strong><small>${titleCase(student.fullName)}</small>`;
     row.appendChild(nameCell);
 
-    ['activity', 'behavior', 'values'].forEach((field) => {
+    [
+      ['activity', 'Atividades'],
+      ['behavior', 'Comport.'],
+      ['values', 'Valores'],
+    ].forEach(([field, label]) => {
       const cell = document.createElement('td');
+      cell.dataset.label = label;
       const auto = document.createElement('span');
       auto.className = 'grade-auto';
+      applyMentionTone(auto, grades.automatic[field]);
       auto.textContent = `Calc. ${grades.automatic[field]}`;
       cell.append(
         auto,
@@ -1629,23 +1655,25 @@ function renderGrades() {
     });
 
     const formalCell = document.createElement('td');
+    formalCell.dataset.label = 'Avaliações formais';
     const formalGrid = document.createElement('div');
     formalGrid.className = 'formal-grid';
     [
-      ['ab', 'AB'],
-      ['abRecovery', 'Ret. AB'],
-      ['ai', 'AI'],
-      ['aiRecovery', 'Ret. AI'],
-    ].forEach(([field, label]) => {
+      ['ab', 'AB', 'A'],
+      ['abRecovery', 'Ret. AB', ''],
+      ['ai', 'AI', 'A'],
+      ['aiRecovery', 'Ret. AI', ''],
+    ].forEach(([field, label, defaultMention]) => {
       const wrap = document.createElement('label');
       wrap.innerHTML = `<span>${label}</span>`;
       wrap.appendChild(createFormalSelect(grades.formalAssessments[field], (event) => {
         saveStudentGrade(student.fullName, { formalAssessments: { [field]: event.target.value } });
-      }));
+      }, defaultMention));
       formalGrid.appendChild(wrap);
     });
     const formalAuto = document.createElement('span');
     formalAuto.className = 'grade-auto';
+    applyMentionTone(formalAuto, grades.automatic.formal);
     formalAuto.textContent = `Final formal: ${grades.automatic.formal}`;
     formalCell.append(
       formalGrid,
@@ -1657,8 +1685,10 @@ function renderGrades() {
     row.appendChild(formalCell);
 
     const finalCell = document.createElement('td');
+    finalCell.dataset.label = 'Final';
     const finalAuto = document.createElement('span');
     finalAuto.className = 'grade-auto';
+    applyMentionTone(finalAuto, grades.finalMentions.final);
     finalAuto.textContent = `Calc. ${grades.finalMentions.final}`;
     finalCell.append(
       finalAuto,
@@ -1669,6 +1699,7 @@ function renderGrades() {
     row.appendChild(finalCell);
 
     const statusCell = document.createElement('td');
+    statusCell.dataset.label = 'Fechamento';
     const statusSelect = document.createElement('select');
     statusSelect.className = 'grade-select';
     statusSelect.disabled = !canEditGrades();
@@ -1689,10 +1720,11 @@ function renderGrades() {
     const statusBadge = document.createElement('span');
     statusBadge.className = `grade-status ${grades.status}`;
     statusBadge.textContent = grades.status === 'approved' ? 'Aprovado' : 'Reprovado';
-    statusCell.append(statusBadge, statusSelect);
+    statusCell.append(statusSelect, statusBadge);
     row.appendChild(statusCell);
 
     const notesCell = document.createElement('td');
+    notesCell.dataset.label = 'Obs.';
     const notesInput = document.createElement('input');
     notesInput.type = 'text';
     notesInput.value = grades.notes;
