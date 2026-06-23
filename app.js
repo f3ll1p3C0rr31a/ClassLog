@@ -1444,10 +1444,12 @@ function calculateStudentGrades(student) {
 
   const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery);
   const ai = bestMention(record?.formalAssessments?.ai || 'A', record?.formalAssessments?.aiRecovery);
+  const philosophyAb = normalizeMentionClient(record?.formalAssessments?.philosophyAb) || 'A';
   const formalAverage = ab && ai
     ? mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2)
     : ab || ai || 'A';
   automatic.formal = formalAverage;
+  automatic.philosophyFormal = mentionFromAverage((mentionScale[philosophyAb] + mentionScale[ai]) / 2);
 
   const finalMentions = {
     activity: normalizeMentionClient(record?.overrides?.activity) || automatic.activity,
@@ -1464,6 +1466,13 @@ function calculateStudentGrades(student) {
   ) / 3;
   const automaticFinal = mentionFromAverage(finalAverage);
   finalMentions.final = normalizeMentionClient(record?.overrides?.final) || automaticFinal;
+  const philosophyFinalAverage = (
+    mentionScale[finalMentions.activity]
+    + behaviorValuesAverage
+    + mentionScale[automatic.philosophyFormal]
+  ) / 3;
+  const automaticPhilosophyFinal = mentionFromAverage(philosophyFinalAverage);
+  finalMentions.philosophyFinal = normalizeMentionClient(record?.overrides?.philosophyFinal) || automaticPhilosophyFinal;
   const automaticStatus = ['ND', 'EP'].includes(finalMentions.final) ? 'failed' : 'approved';
   const status = record?.statusOverride || automaticStatus;
 
@@ -1471,6 +1480,7 @@ function calculateStudentGrades(student) {
     automatic,
     finalMentions,
     formalAssessments: record?.formalAssessments || {},
+    philosophyAb,
     status,
     automaticStatus,
     notes: record?.notes || '',
@@ -1685,7 +1695,7 @@ function renderGrades() {
     row.appendChild(formalCell);
 
     const finalCell = document.createElement('td');
-    finalCell.dataset.label = 'Final';
+    finalCell.dataset.label = 'Final História';
     const finalAuto = document.createElement('span');
     finalAuto.className = 'grade-auto';
     applyMentionTone(finalAuto, grades.finalMentions.final);
@@ -1697,6 +1707,36 @@ function renderGrades() {
       }),
     );
     row.appendChild(finalCell);
+
+    const philosophyCell = document.createElement('td');
+    philosophyCell.dataset.label = 'Filosofia';
+    const philosophyGrid = document.createElement('div');
+    philosophyGrid.className = 'philosophy-grid';
+    const philosophyAbWrap = document.createElement('label');
+    philosophyAbWrap.innerHTML = '<span>AB Filosofia</span>';
+    philosophyAbWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAb, (event) => {
+      saveStudentGrade(student.fullName, { formalAssessments: { philosophyAb: event.target.value } });
+    }, 'A'));
+    const sharedAiWrap = document.createElement('div');
+    sharedAiWrap.className = 'shared-grade';
+    sharedAiWrap.innerHTML = '<span>AI compartilhada</span>';
+    const sharedAiValue = document.createElement('strong');
+    sharedAiValue.textContent = bestMention(grades.formalAssessments.ai || 'A', grades.formalAssessments.aiRecovery) || 'A';
+    applyMentionTone(sharedAiValue, sharedAiValue.textContent);
+    sharedAiWrap.appendChild(sharedAiValue);
+    philosophyGrid.append(philosophyAbWrap, sharedAiWrap);
+    const philosophyAuto = document.createElement('span');
+    philosophyAuto.className = 'grade-auto';
+    applyMentionTone(philosophyAuto, grades.finalMentions.philosophyFinal);
+    philosophyAuto.textContent = `Calc. ${grades.finalMentions.philosophyFinal}`;
+    philosophyCell.append(
+      philosophyGrid,
+      philosophyAuto,
+      createMentionSelect(record.overrides?.philosophyFinal, grades.finalMentions.philosophyFinal, (event) => {
+        saveStudentGrade(student.fullName, { overrides: { philosophyFinal: event.target.value } });
+      }),
+    );
+    row.appendChild(philosophyCell);
 
     const statusCell = document.createElement('td');
     statusCell.dataset.label = 'Fechamento';
