@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: uikey-hnyx6
+created: 2026-06-21T21:04:40-03:00

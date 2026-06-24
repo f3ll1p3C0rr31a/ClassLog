@@ -1,0 +1,16 @@
+# Configuracao local do Codex para este projeto.
+# Esta pasta fica fora do Git e pode ser sincronizada por Syncthing.
+
+[project]
+name = "ClassLog"
+context_dir = "IA-Context"
+
+[instructions]
+read_first = [
+  "README.md",
+  "IA-Context/AGENTS.md",
+  "IA-Context/docs/contexto.md",
+  "IA-Context/docs/arquitetura.md",
+  "IA-Context/docs/tarefas.md",
+  "IA-Context/docs/decisoes.md",
+]
