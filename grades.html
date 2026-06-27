@@ -79,10 +79,19 @@
         </div>
         <p class="hint" id="gradesHint">Carregando menções...</p>
 
+        <div class="grades-bulk-bar" id="gradesBulkBar" hidden>
+          <span id="gradesBulkText"></span>
+          <div class="grades-bulk-actions">
+            <button class="ghost-button" type="button" id="gradesBulkCancel">Cancelar</button>
+            <button class="primary-button" type="button" id="gradesBulkConfirm">Confirmar</button>
+          </div>
+        </div>
+
         <div class="grades-table-wrap">
           <table class="grades-table">
             <thead>
               <tr>
+                <th><input type="checkbox" id="gradesSelectAll" title="Selecionar todos" /></th>
                 <th>Aluno</th>
                 <th>Atv</th>
                 <th>CeV</th>

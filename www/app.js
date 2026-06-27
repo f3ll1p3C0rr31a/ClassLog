@@ -228,6 +228,8 @@ const state = {
     termKey: '',
     query: '',
   },
+  gradeSelection: new Set(),
+  gradeBulkPatch: null,
   historyMode: 'selected',
   historyFilters: {
     student: '',
@@ -248,6 +250,26 @@ const state = {
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function showToast(message, duration = 3200) {
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.className = 'toast-container';
+    container.setAttribute('aria-live', 'polite');
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('visible'));
+  setTimeout(() => {
+    toast.classList.remove('visible');
+    setTimeout(() => toast.remove(), 250);
+  }, duration);
 }
 
 const elements = {
@@ -343,6 +365,11 @@ const elements = {
   gradesRefreshButton: $('gradesRefreshButton'),
   gradesHint: $('gradesHint'),
   gradesTableBody: $('gradesTableBody'),
+  gradesSelectAll: $('gradesSelectAll'),
+  gradesBulkBar: $('gradesBulkBar'),
+  gradesBulkText: $('gradesBulkText'),
+  gradesBulkConfirm: $('gradesBulkConfirm'),
+  gradesBulkCancel: $('gradesBulkCancel'),
   settingsPanel: $('settingsPanel'),
   settingsSchoolSelect: $('settingsSchoolSelect'),
   settingsStart: $('settingsStart'),
@@ -1212,6 +1239,10 @@ function renderStudentChips() {
         state.selectedStudents = isSelected
           ? state.selectedStudents.filter((fullName) => fullName !== student.fullName)
           : [...state.selectedStudents.filter((fullName) => !classNames.has(fullName)), student.fullName];
+        if (!isSelected) {
+          // Selecting the whole class is most often for a class-wide diário entry, not an individual occurrence.
+          state.recordKind = 'daily';
+        }
       } else {
         const classTargetName = `__CLASS__:${state.selectedSchoolId}:${student.classKey}`;
         state.selectedStudents = state.selectedStudents.filter((fullName) => fullName !== classTargetName);
@@ -1441,13 +1472,12 @@ function calculateStudentGrades(student) {
     behaviorValues: mentionFromPoints(behaviorPoints),
   };
 
-  const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery);
-  const ai = bestMention(record?.formalAssessments?.ai || 'A', record?.formalAssessments?.aiRecovery);
-  const philosophyAb = bestMention(record?.formalAssessments?.philosophyAb || 'A', record?.formalAssessments?.philosophyAbRecovery);
-  const formalAverage = ab && ai
-    ? mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2)
-    : ab || ai || 'A';
-  automatic.formal = formalAverage;
+  // Every formal field defaults to A until graded — manual entries or the recovery comparison always take priority over that default.
+  const ab = bestMention(record?.formalAssessments?.ab || 'A', record?.formalAssessments?.abRecovery || 'A');
+  const ai = bestMention(record?.formalAssessments?.ai || 'A', record?.formalAssessments?.aiRecovery || 'A');
+  const philosophyAb = bestMention(record?.formalAssessments?.philosophyAb || 'A', record?.formalAssessments?.philosophyAbRecovery || 'A');
+  // Display-only summary of the Bimestral+Integrada pair; the final average below uses ab/ai directly, in equal parts with Atv/CeV.
+  automatic.formal = mentionFromAverage((mentionScale[ab] + mentionScale[ai]) / 2);
   automatic.philosophyFormal = mentionFromAverage((mentionScale[philosophyAb] + mentionScale[ai]) / 2);
 
   const legacyBehavior = normalizeMentionClient(record?.overrides?.behavior);
@@ -1462,18 +1492,25 @@ function calculateStudentGrades(student) {
     formal: normalizeMentionClient(record?.overrides?.formal) || automatic.formal,
   };
 
+  // Equal-weight average of the four assessments: Atv, CeV, Bimestral (best of AB/Retomada) and Integrada (best of AI/Retomada).
+  // An override on "formal" stands in for both the Bimestral and Integrada slots at once.
+  const formalOverride = normalizeMentionClient(record?.overrides?.formal);
+  const historyAb = formalOverride || ab;
+  const historyAi = formalOverride || ai;
   const finalAverage = (
     mentionScale[finalMentions.activity]
     + mentionScale[finalMentions.behaviorValues]
-    + mentionScale[finalMentions.formal]
-  ) / 3;
+    + mentionScale[historyAb]
+    + mentionScale[historyAi]
+  ) / 4;
   const automaticFinal = mentionFromAverage(finalAverage);
   finalMentions.final = normalizeMentionClient(record?.overrides?.final) || automaticFinal;
   const philosophyFinalAverage = (
     mentionScale[finalMentions.activity]
     + mentionScale[finalMentions.behaviorValues]
-    + mentionScale[automatic.philosophyFormal]
-  ) / 3;
+    + mentionScale[philosophyAb]
+    + mentionScale[ai]
+  ) / 4;
   const automaticPhilosophyFinal = mentionFromAverage(philosophyFinalAverage);
   finalMentions.philosophyFinal = automaticPhilosophyFinal;
   const automaticStatus = ['ND', 'EP'].includes(finalMentions.final) ? 'failed' : 'approved';
@@ -1538,7 +1575,7 @@ function createFormalSelect(value, onChange, defaultMention = '') {
   applyMentionTone(select, value || defaultMention);
   const empty = document.createElement('option');
   empty.value = '';
-  empty.textContent = defaultMention || '--';
+  empty.textContent = defaultMention ? `${defaultMention} (Auto)` : '--';
   select.appendChild(empty);
   mentionOrder.forEach((mention) => {
     const option = document.createElement('option');
@@ -1647,6 +1684,66 @@ function createStatusControl(title, status, automaticStatus, selectedValue, onCh
   return wrap;
 }
 
+function toggleGradeSelection(fullName, checked) {
+  if (checked) state.gradeSelection.add(fullName);
+  else state.gradeSelection.delete(fullName);
+  if (state.gradeSelection.size <= 1) state.gradeBulkPatch = null;
+  renderGrades();
+}
+
+function toggleAllGradeSelection(checked) {
+  const classGroup = getCurrentClassGroups().find((group) => group.key === state.gradeFilters.classKey) || getCurrentClassGroups()[0];
+  const query = normalizeKey(state.gradeFilters.query);
+  const fullNames = (classGroup?.students || []).filter((fullName) => !query || normalizeKey(fullName).includes(query));
+  fullNames.forEach((fullName) => (checked ? state.gradeSelection.add(fullName) : state.gradeSelection.delete(fullName)));
+  if (state.gradeSelection.size <= 1) state.gradeBulkPatch = null;
+  renderGrades();
+}
+
+function commitGradeFieldChange(studentFullName, patchType, patchKey, value) {
+  if (patchType === 'override') return saveStudentGrade(studentFullName, { overrides: { [patchKey]: value } });
+  if (patchType === 'formal') return saveStudentGrade(studentFullName, { formalAssessments: { [patchKey]: value } });
+  if (patchType === 'status') return saveStudentGrade(studentFullName, { [patchKey]: value });
+  return Promise.resolve();
+}
+
+function handleGradeFieldChange(student, patchType, patchKey, value, label) {
+  if (state.gradeSelection.size > 1 && state.gradeSelection.has(student.fullName)) {
+    state.gradeBulkPatch = { patchType, patchKey, value, label };
+    renderGrades();
+    return;
+  }
+  commitGradeFieldChange(student.fullName, patchType, patchKey, value);
+}
+
+async function confirmGradeBulkPatch() {
+  const patch = state.gradeBulkPatch;
+  if (!patch) return;
+  const targets = [...state.gradeSelection];
+  state.gradeBulkPatch = null;
+  for (const fullName of targets) {
+    await commitGradeFieldChange(fullName, patch.patchType, patch.patchKey, patch.value);
+  }
+}
+
+function cancelGradeBulkPatch() {
+  state.gradeBulkPatch = null;
+  renderGrades();
+}
+
+function renderGradeBulkBar() {
+  if (!elements.gradesBulkBar) return;
+  const patch = state.gradeBulkPatch;
+  if (!patch) {
+    elements.gradesBulkBar.hidden = true;
+    return;
+  }
+  elements.gradesBulkBar.hidden = false;
+  if (elements.gradesBulkText) {
+    elements.gradesBulkText.textContent = `Aplicar ${patch.label} = ${patch.value || 'Auto'} para ${state.gradeSelection.size} alunos selecionados?`;
+  }
+}
+
 function renderGrades() {
   if (!elements.gradesTableBody) return;
 
@@ -1662,11 +1759,17 @@ function renderGrades() {
   if (elements.gradesHint) {
     elements.gradesHint.textContent = `${students.length} aluno(s) em ${classGroup?.label || 'turma'} · ${state.gradeFilters.termKey.toUpperCase()}`;
   }
+  renderGradeBulkBar();
+
+  if (elements.gradesSelectAll) {
+    const visibleNames = students.map((student) => student.fullName);
+    elements.gradesSelectAll.checked = visibleNames.length > 0 && visibleNames.every((fullName) => state.gradeSelection.has(fullName));
+  }
 
   if (students.length === 0) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 8;
+    cell.colSpan = 9;
     cell.className = 'hint';
     cell.textContent = 'Nenhum aluno encontrado.';
     row.appendChild(cell);
@@ -1678,6 +1781,21 @@ function renderGrades() {
     const grades = calculateStudentGrades(student);
     const record = getGradeRecord(student.fullName) || {};
     const row = document.createElement('tr');
+    const isSelected = state.gradeSelection.has(student.fullName);
+    const bulkPatch = state.gradeBulkPatch && state.gradeSelection.size > 1 && isSelected ? state.gradeBulkPatch : null;
+    const bulkValue = (patchType, patchKey, fallback) => (
+      bulkPatch && bulkPatch.patchType === patchType && bulkPatch.patchKey === patchKey ? bulkPatch.value : fallback
+    );
+    if (isSelected) row.classList.add('grade-row-selected');
+
+    const checkboxCell = document.createElement('td');
+    checkboxCell.dataset.label = '';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isSelected;
+    checkbox.addEventListener('change', (event) => toggleGradeSelection(student.fullName, event.target.checked));
+    checkboxCell.appendChild(checkbox);
+    row.appendChild(checkboxCell);
 
     const nameCell = document.createElement('th');
     nameCell.scope = 'row';
@@ -1697,8 +1815,8 @@ function renderGrades() {
       auto.textContent = `Calc. ${grades.automatic[field]}`;
       cell.append(
         auto,
-        createMentionSelect(record.overrides?.[field], grades.automatic[field], (event) => {
-          saveStudentGrade(student.fullName, { overrides: { [field]: event.target.value } });
+        createMentionSelect(bulkValue('override', field, record.overrides?.[field]), grades.automatic[field], (event) => {
+          handleGradeFieldChange(student, 'override', field, event.target.value, label);
         }),
       );
       row.appendChild(cell);
@@ -1716,8 +1834,8 @@ function renderGrades() {
     ].forEach(([field, label, defaultMention]) => {
       const wrap = document.createElement('label');
       wrap.innerHTML = `<span>${label}</span>`;
-      wrap.appendChild(createFormalSelect(grades.formalAssessments[field], (event) => {
-        saveStudentGrade(student.fullName, { formalAssessments: { [field]: event.target.value } });
+      wrap.appendChild(createFormalSelect(bulkValue('formal', field, grades.formalAssessments[field]), (event) => {
+        handleGradeFieldChange(student, 'formal', field, event.target.value, label);
       }, defaultMention));
       formalGrid.appendChild(wrap);
     });
@@ -1728,8 +1846,8 @@ function renderGrades() {
     formalCell.append(
       formalGrid,
       formalAuto,
-      createMentionSelect(record.overrides?.formal, grades.automatic.formal, (event) => {
-        saveStudentGrade(student.fullName, { overrides: { formal: event.target.value } });
+      createMentionSelect(bulkValue('override', 'formal', record.overrides?.formal), grades.automatic.formal, (event) => {
+        handleGradeFieldChange(student, 'override', 'formal', event.target.value, 'Final formal');
       }),
     );
     row.appendChild(formalCell);
@@ -1742,8 +1860,8 @@ function renderGrades() {
     finalAuto.textContent = `Calc. ${grades.finalMentions.final}`;
     finalCell.append(
       finalAuto,
-      createMentionSelect(record.overrides?.final, grades.finalMentions.final, (event) => {
-        saveStudentGrade(student.fullName, { overrides: { final: event.target.value } });
+      createMentionSelect(bulkValue('override', 'final', record.overrides?.final), grades.finalMentions.final, (event) => {
+        handleGradeFieldChange(student, 'override', 'final', event.target.value, 'Final História');
       }),
     );
     row.appendChild(finalCell);
@@ -1754,19 +1872,19 @@ function renderGrades() {
     philosophyGrid.className = 'philosophy-grid';
     const philosophyAbWrap = document.createElement('label');
     philosophyAbWrap.innerHTML = '<span>AB Filo.</span>';
-    philosophyAbWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAb, (event) => {
-      saveStudentGrade(student.fullName, { formalAssessments: { philosophyAb: event.target.value } });
+    philosophyAbWrap.appendChild(createFormalSelect(bulkValue('formal', 'philosophyAb', grades.formalAssessments.philosophyAb), (event) => {
+      handleGradeFieldChange(student, 'formal', 'philosophyAb', event.target.value, 'AB Filo.');
     }, 'A'));
     const philosophyRecoveryWrap = document.createElement('label');
     philosophyRecoveryWrap.innerHTML = '<span>Ret. AB Filo.</span>';
-    philosophyRecoveryWrap.appendChild(createFormalSelect(grades.formalAssessments.philosophyAbRecovery, (event) => {
-      saveStudentGrade(student.fullName, { formalAssessments: { philosophyAbRecovery: event.target.value } });
+    philosophyRecoveryWrap.appendChild(createFormalSelect(bulkValue('formal', 'philosophyAbRecovery', grades.formalAssessments.philosophyAbRecovery), (event) => {
+      handleGradeFieldChange(student, 'formal', 'philosophyAbRecovery', event.target.value, 'Ret. AB Filo.');
     }, 'A'));
     const sharedAiWrap = document.createElement('div');
     sharedAiWrap.className = 'shared-grade';
     sharedAiWrap.innerHTML = '<span>AI compart.</span>';
     const sharedAiValue = document.createElement('strong');
-    sharedAiValue.textContent = bestMention(grades.formalAssessments.ai || 'A', grades.formalAssessments.aiRecovery) || 'A';
+    sharedAiValue.textContent = bestMention(grades.formalAssessments.ai || 'A', grades.formalAssessments.aiRecovery || 'A');
     applyMentionTone(sharedAiValue, sharedAiValue.textContent);
     sharedAiWrap.appendChild(sharedAiValue);
     philosophyGrid.append(philosophyAbWrap, philosophyRecoveryWrap, sharedAiWrap);
@@ -1780,11 +1898,11 @@ function renderGrades() {
     const statusCell = document.createElement('td');
     statusCell.dataset.label = 'Fechamento';
     statusCell.append(
-      createStatusControl('Hist.', grades.status, grades.automaticStatus, record.statusOverride, (value) => {
-        saveStudentGrade(student.fullName, { statusOverride: value });
+      createStatusControl('Hist.', grades.status, grades.automaticStatus, bulkValue('status', 'statusOverride', record.statusOverride), (value) => {
+        handleGradeFieldChange(student, 'status', 'statusOverride', value, 'Status Hist.');
       }),
-      createStatusControl('Filo.', grades.philosophyStatus, grades.automaticPhilosophyStatus, record.philosophyStatusOverride, (value) => {
-        saveStudentGrade(student.fullName, { philosophyStatusOverride: value });
+      createStatusControl('Filo.', grades.philosophyStatus, grades.automaticPhilosophyStatus, bulkValue('status', 'philosophyStatusOverride', record.philosophyStatusOverride), (value) => {
+        handleGradeFieldChange(student, 'status', 'philosophyStatusOverride', value, 'Status Filo.');
       }),
     );
     row.appendChild(statusCell);
@@ -2469,7 +2587,7 @@ async function saveReport() {
     state.reports = [localReport, ...state.reports];
     await clearDraft();
     await refreshPendingCount();
-    alert('Salvo no aparelho. A sincronização acontecerá automaticamente.');
+    showToast('Ocorrência salva. Será sincronizada em breve.');
     requestBackgroundSync();
     synchronizePendingReports();
     navigate('history');
@@ -2997,6 +3115,8 @@ function bindEvents() {
   if (elements.gradesClassSelect) {
     elements.gradesClassSelect.addEventListener('change', async () => {
       state.gradeFilters.classKey = elements.gradesClassSelect.value;
+      state.gradeSelection.clear();
+      state.gradeBulkPatch = null;
       await loadGradeRecords();
       renderGrades();
     });
@@ -3005,6 +3125,8 @@ function bindEvents() {
   if (elements.gradesTermSelect) {
     elements.gradesTermSelect.addEventListener('change', async () => {
       state.gradeFilters.termKey = elements.gradesTermSelect.value;
+      state.gradeSelection.clear();
+      state.gradeBulkPatch = null;
       await loadGradeRecords();
       renderGrades();
     });
@@ -3023,6 +3145,20 @@ function bindEvents() {
       await loadGradeRecords();
       renderGrades();
     });
+  }
+
+  if (elements.gradesSelectAll) {
+    elements.gradesSelectAll.addEventListener('change', () => {
+      toggleAllGradeSelection(elements.gradesSelectAll.checked);
+    });
+  }
+
+  if (elements.gradesBulkConfirm) {
+    elements.gradesBulkConfirm.addEventListener('click', confirmGradeBulkPatch);
+  }
+
+  if (elements.gradesBulkCancel) {
+    elements.gradesBulkCancel.addEventListener('click', cancelGradeBulkPatch);
   }
 
   if (elements.settingsSchoolSelect) {
