@@ -36,10 +36,13 @@ deixa `www/` desatualizado (isso não afeta a versão web, mas afeta o próximo
 build mobile). O workflow de deploy já roda `web:prepare` automaticamente antes
 de publicar, então isso só importa para quem builda o app Android localmente.
 
-## 4. Git: sem credencial de push configurada nesta máquina
-Ver detalhes em [`deployment.md`](deployment.md). Resumo: não tente "resolver"
-push sozinho sem credencial — não tem como, e a ferramenta de Bash não tem TTY
-para receber senha digitada pelo usuário em tempo real.
+## 4. Git push — resolvido via `gh` CLI (não precisa mais de SSH)
+Ver detalhes em [`deployment.md`](deployment.md). Resumo: `gh auth setup-git`
+já deixou o `git push`/`pull` via HTTPS autenticado automaticamente nesta
+máquina. Se em outra máquina/sessão o push falhar com "could not read
+Username", **não** tente inventar credencial sozinho — instale `gh`, rode
+`gh auth login` em background com timeout (ele imprime um device code + URL),
+peça para o usuário confirmar no navegador, e então `gh auth setup-git`.
 
 ## 5. Momento disciplinar não pode ser aplicado à turma inteira
 Por design — `app.js` bloqueia explicitamente com alerta
