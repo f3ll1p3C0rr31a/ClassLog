@@ -996,6 +996,32 @@ body.handwriting-open {
   background: rgba(255, 255, 255, 0.58);
 }
 
+.grades-bulk-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.grades-bulk-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.grade-row-selected {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
 .grades-table {
   width: 100%;
   min-width: 1160px;
@@ -1349,4 +1375,36 @@ body.handwriting-open {
 .login-privacy {
   margin-top: 18px;
   text-align: center;
+}
+
+.toast-container {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--accent-dark, #16324f);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 600;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  max-width: 86vw;
+  text-align: center;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
