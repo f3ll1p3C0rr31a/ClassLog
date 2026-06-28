@@ -1378,10 +1378,10 @@ function mentionFromPoints(points) {
 }
 
 function mentionFromAverage(points) {
-  if (points <= 0) return 'ND';
-  if (points < 5) return 'EP';
+  if (points < 1.5) return 'ND';
+  if (points < 4) return 'EP';
   if (points < 6) return 'A';
-  if (points < 9) return 'AL';
+  if (points < 8) return 'AL';
   return 'AE';
 }
 

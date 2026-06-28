@@ -76,6 +76,8 @@
       "notes": "",
       "location": null,
       "photoDataUrl": "",
+      "handwritingData": null,
+      "handwritingPreviewDataUrl": "",
       "status": "aberta",
       "deletedAt": null,
       "deletedBy": null,
@@ -113,6 +115,8 @@
       "notes": "teste",
       "location": null,
       "photoDataUrl": "",
+      "handwritingData": null,
+      "handwritingPreviewDataUrl": "",
       "status": "excluida",
       "deletedAt": "2026-05-31T20:48:26.758Z",
       "deletedBy": "fellipecorreia",
@@ -174,6 +178,8 @@
       "notes": "TEste1",
       "location": null,
       "photoDataUrl": "",
+      "handwritingData": null,
+      "handwritingPreviewDataUrl": "",
       "status": "excluida",
       "deletedAt": "2026-05-30T17:49:30.059Z",
       "deletedBy": "coordenacao",
@@ -231,7 +237,9 @@
           "Sem material",
           "Uso indevido do celular",
           "Conversando durante a explicação",
-          "Outra"
+          "Outra",
+          "De pé, andando pela sala.",
+          "Ocorrência Positiva"
         ],
         "policies": {
           "disciplinaryMomentEnabled": false
@@ -260,7 +268,9 @@
           "Desrespeito com colegas",
           "Desrespeito com equipe escolar",
           "Saída da sala sem autorização",
-          "Outra"
+          "Outra",
+          "De pé, andando pela sala.",
+          "Ocorrência Positiva"
         ],
         "policies": {
           "disciplinaryMomentEnabled": true
@@ -299,5 +309,6 @@
         }
       ]
     }
-  ]
+  ],
+  "gradeRecords": []
 }
