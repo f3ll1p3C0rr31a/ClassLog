@@ -229,6 +229,7 @@ const state = {
     query: '',
   },
   gradeSelection: new Set(),
+  gradeBulkEditMode: false,
   gradeBulkPatch: null,
   historyMode: 'selected',
   historyFilters: {
@@ -366,6 +367,8 @@ const elements = {
   gradesHint: $('gradesHint'),
   gradesTableBody: $('gradesTableBody'),
   gradesSelectAll: $('gradesSelectAll'),
+  gradesBulkModeWrap: $('gradesBulkModeWrap'),
+  gradesBulkModeToggle: $('gradesBulkModeToggle'),
   gradesBulkBar: $('gradesBulkBar'),
   gradesBulkText: $('gradesBulkText'),
   gradesBulkConfirm: $('gradesBulkConfirm'),
@@ -1687,7 +1690,10 @@ function createStatusControl(title, status, automaticStatus, selectedValue, onCh
 function toggleGradeSelection(fullName, checked) {
   if (checked) state.gradeSelection.add(fullName);
   else state.gradeSelection.delete(fullName);
-  if (state.gradeSelection.size <= 1) state.gradeBulkPatch = null;
+  if (state.gradeSelection.size <= 1) {
+    state.gradeBulkEditMode = false;
+    state.gradeBulkPatch = null;
+  }
   renderGrades();
 }
 
@@ -1696,7 +1702,16 @@ function toggleAllGradeSelection(checked) {
   const query = normalizeKey(state.gradeFilters.query);
   const fullNames = (classGroup?.students || []).filter((fullName) => !query || normalizeKey(fullName).includes(query));
   fullNames.forEach((fullName) => (checked ? state.gradeSelection.add(fullName) : state.gradeSelection.delete(fullName)));
-  if (state.gradeSelection.size <= 1) state.gradeBulkPatch = null;
+  if (state.gradeSelection.size <= 1) {
+    state.gradeBulkEditMode = false;
+    state.gradeBulkPatch = null;
+  }
+  renderGrades();
+}
+
+function toggleGradeBulkEditMode(checked) {
+  state.gradeBulkEditMode = checked;
+  if (!checked) state.gradeBulkPatch = null;
   renderGrades();
 }
 
@@ -1708,7 +1723,7 @@ function commitGradeFieldChange(studentFullName, patchType, patchKey, value) {
 }
 
 function handleGradeFieldChange(student, patchType, patchKey, value, label) {
-  if (state.gradeSelection.size > 1 && state.gradeSelection.has(student.fullName)) {
+  if (state.gradeBulkEditMode && state.gradeSelection.size > 1 && state.gradeSelection.has(student.fullName)) {
     state.gradeBulkPatch = { patchType, patchKey, value, label };
     renderGrades();
     return;
@@ -1732,9 +1747,16 @@ function cancelGradeBulkPatch() {
 }
 
 function renderGradeBulkBar() {
+  if (elements.gradesBulkModeWrap) {
+    elements.gradesBulkModeWrap.hidden = state.gradeSelection.size <= 1;
+  }
+  if (elements.gradesBulkModeToggle) {
+    elements.gradesBulkModeToggle.checked = state.gradeBulkEditMode;
+  }
+
   if (!elements.gradesBulkBar) return;
   const patch = state.gradeBulkPatch;
-  if (!patch) {
+  if (!patch || !state.gradeBulkEditMode) {
     elements.gradesBulkBar.hidden = true;
     return;
   }
@@ -1782,7 +1804,9 @@ function renderGrades() {
     const record = getGradeRecord(student.fullName) || {};
     const row = document.createElement('tr');
     const isSelected = state.gradeSelection.has(student.fullName);
-    const bulkPatch = state.gradeBulkPatch && state.gradeSelection.size > 1 && isSelected ? state.gradeBulkPatch : null;
+    const bulkPatch = state.gradeBulkEditMode && state.gradeBulkPatch && state.gradeSelection.size > 1 && isSelected
+      ? state.gradeBulkPatch
+      : null;
     const bulkValue = (patchType, patchKey, fallback) => (
       bulkPatch && bulkPatch.patchType === patchType && bulkPatch.patchKey === patchKey ? bulkPatch.value : fallback
     );
@@ -2922,11 +2946,24 @@ function renderAll() {
 }
 
 async function onSchoolChange(nextSchoolId, manual = true) {
-  if (!navigator.onLine || state.isOfflineSession) {
+  if (!navigator.onLine) {
     alert('A troca de escola precisa de conexão com a internet.');
     renderSchoolSelects();
     return;
   }
+
+  if (state.isOfflineSession) {
+    // isOfflineSession can go stale (set after a transient request failure) even though
+    // the device is actually online, so re-check real connectivity before blocking.
+    await synchronizePendingReports();
+  }
+
+  if (state.isOfflineSession) {
+    alert('A troca de escola precisa de conexão com a internet.');
+    renderSchoolSelects();
+    return;
+  }
+
   state.selectedSchoolId = nextSchoolId;
   state.manualSchoolSelection = manual;
   state.selectedStudents = [];
@@ -3116,6 +3153,7 @@ function bindEvents() {
     elements.gradesClassSelect.addEventListener('change', async () => {
       state.gradeFilters.classKey = elements.gradesClassSelect.value;
       state.gradeSelection.clear();
+      state.gradeBulkEditMode = false;
       state.gradeBulkPatch = null;
       await loadGradeRecords();
       renderGrades();
@@ -3126,6 +3164,7 @@ function bindEvents() {
     elements.gradesTermSelect.addEventListener('change', async () => {
       state.gradeFilters.termKey = elements.gradesTermSelect.value;
       state.gradeSelection.clear();
+      state.gradeBulkEditMode = false;
       state.gradeBulkPatch = null;
       await loadGradeRecords();
       renderGrades();
@@ -3150,6 +3189,12 @@ function bindEvents() {
   if (elements.gradesSelectAll) {
     elements.gradesSelectAll.addEventListener('change', () => {
       toggleAllGradeSelection(elements.gradesSelectAll.checked);
+    });
+  }
+
+  if (elements.gradesBulkModeToggle) {
+    elements.gradesBulkModeToggle.addEventListener('change', () => {
+      toggleGradeBulkEditMode(elements.gradesBulkModeToggle.checked);
     });
   }
 
