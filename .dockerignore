@@ -1,0 +1,23 @@
+.git
+.github
+.claude
+node_modules
+
+# Build mobile: nada disso é servido pelo server.js
+android
+www
+assets
+
+# O banco vem do bind mount do host, nunca da imagem
+data
+
+# Documentação e ferramentas de desenvolvimento
+IaContext
+scripts/release-android.sh
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+*.log
+*.apk
+*.keystore

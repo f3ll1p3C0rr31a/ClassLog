@@ -12,7 +12,9 @@ essa subpasta.
   (História/Filosofia, Bimestral/Retomada, ATV/CEV). **Leia antes de tocar em
   `calculateStudentGrades` em `app.js`.**
 - [`deployment.md`](deployment.md) — como o deploy funciona (push → GitHub Actions
-  → runner self-hosted "Jupiter" → Docker) e a pegadinha do cache do Service Worker.
+  → runner self-hosted no **Saturno**, CT 101 "ct-web" → imagem Docker construída
+  a cada deploy), onde cada coisa mora no servidor, e a pegadinha do cache do
+  Service Worker.
 - [`deploy.md`](deploy.md) — guia **generalizado** para replicar esta arquitetura
   de deploy (GitHub Actions + runner self-hosted + Docker + gh CLI) em outro projeto,
   incluindo checklist de verificação de ambiente para múltiplas máquinas.

@@ -12,6 +12,11 @@ const SESSION_COOKIE = 'classlog_session';
 const SESSION_SECRET = process.env.CLASSLOG_SECRET || 'classlog-dev-secret';
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SCHOOL_TIME_ZONE = process.env.CLASSLOG_TIME_ZONE || 'America/Sao_Paulo';
+// Injetado pelo build da imagem (ARG APP_COMMIT_SHA). É o que permite ao
+// health check do deploy distinguir "o servidor respondeu" de "o servidor
+// respondeu com o código que acabei de publicar".
+const APP_COMMIT_SHA = process.env.APP_COMMIT_SHA || 'unknown';
+const APP_STARTED_AT = new Date().toISOString();
 const ALLOWED_CORS_ORIGINS = new Set([
   'https://localhost',
   'capacitor://localhost',
@@ -1443,6 +1448,15 @@ async function saveGradeRecord(res, body, user) {
 }
 
 async function handleApi(req, res, url) {
+  // Público de propósito: o health check do deploy roda sem sessão.
+  if (url.pathname === '/api/version' && req.method === 'GET') {
+    sendJson(res, 200, {
+      commit: APP_COMMIT_SHA,
+      startedAt: APP_STARTED_AT,
+    });
+    return;
+  }
+
   if (url.pathname === '/api/auth/me' && req.method === 'GET') {
     const user = getUserFromRequest(req);
     sendJson(res, 200, { user: user || null });

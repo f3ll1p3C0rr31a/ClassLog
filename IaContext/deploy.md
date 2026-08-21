@@ -51,7 +51,7 @@ que não existe.
        │
    dispara job no runner self-hosted
        │
-  Servidor "Jupiter" (192.168.0.10 / Tailscale)
+  Servidor "Saturno" (192.168.0.11 / Tailscale 100.68.161.47)
   └── GitHub Actions Runner (serviço systemd)
         │  checkout do repo
         │  validações (node --check, npm audit)
@@ -120,8 +120,8 @@ jobs:
         run: bash scripts/deploy-production.sh
 ```
 
-**Label do runner**: escolha um nome único por projeto (ex.: `classlog-jupiter`,
-`meuapp-jupiter`). Um servidor pode hospedar múltiplos runners com labels
+**Label do runner**: escolha um nome único por projeto (ex.: `classlog-saturno`,
+`meuapp-saturno`). Um servidor pode hospedar múltiplos runners com labels
 diferentes — eles não interferem entre si.
 
 ---
@@ -131,7 +131,7 @@ diferentes — eles não interferem entre si.
 Faça isso **uma vez** no servidor, para cada novo projeto:
 
 ```bash
-# No servidor (Jupiter / 192.168.0.10), como o usuário que vai rodar o serviço:
+# No servidor (Saturno / 192.168.0.11), dentro do CT 101 "ct-web":
 
 mkdir -p ~/actions-runners/<nome-do-projeto>
 cd ~/actions-runners/<nome-do-projeto>
@@ -322,7 +322,7 @@ está online, o deploy acontece sozinho.
 | `git push` pede usuário/senha | `credential.helper` não configurado | `gh auth setup-git` |
 | `git push` falha com "could not read Username" | `gh` não instalado ou não autenticado | Instalar `gh` + `gh auth login` |
 | Job no Actions não aparece | Push não chegou no GitHub | Verifique `git log --oneline origin/main` |
-| Job falha em "checkout" | Runner offline ou desregistrado | `sudo ./svc.sh status` no servidor |
+| Job falha em "checkout" | Runner offline ou desregistrado | `systemctl status actions.runner.*` no CT 101 |
 | Container não sobe | Erro no código novo | `docker logs <container> --tail 50` |
 | Deploy OK mas mudança não aparece | Cache do Service Worker (se PWA) | Suba `CACHE_NAME` no `service-worker.js` |
 
@@ -333,8 +333,8 @@ está online, o deploy acontece sozinho.
 | Componente | Valor no ClassLog |
 |---|---|
 | Repositório | `https://github.com/f3ll1p3C0rr31a/ClassLog` |
-| Runner label | `classlog-jupiter` |
-| Servidor | Jupiter — `192.168.0.10` (LAN) / Tailscale |
+| Runner label | `classlog-saturno` |
+| Servidor | Saturno — `192.168.0.11` (LAN) / `100.68.161.47` (Tailscale), CT 101 "ct-web" |
 | Container | `classlog-api` (porta 3000 interna) |
 | Dir. produção | `/home/fellipecorreia/sites/classlog/app` |
 | Dados | `data/classlog-db.json` |

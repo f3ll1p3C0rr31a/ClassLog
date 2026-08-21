@@ -76,3 +76,24 @@ com "não foi possível adicionar o widget". `scripts/check-widget-layout.mjs`
 `~/android-toolchain/jdk` é o 17 e o build morre com `invalid source release: 21`.
 O JDK 21 está em `~/android-toolchain/jdk21`, que é o padrão do
 `scripts/release-android.sh`.
+
+## 10. Lista fixa de arquivos no deploy deixou página nova fora de produção
+O `deploy-production.sh` do tempo do Jupiter copiava uma **lista literal** de
+arquivos (`FILES=(...)`) para produção. Página nova que não fosse adicionada à
+lista simplesmente não subia — e não havia erro nenhum: o deploy passava, o
+health check passava, e a página dava 404 em produção. Foi o que teria
+acontecido com `schedule.html`. Hoje o `Dockerfile` faz `COPY . .` e quem decide
+o que fica de fora é o `.dockerignore`, que erra para o lado seguro.
+
+## 11. Health check que não olha o commit não prova nada
+O check antigo batia em `/api/auth/me` e considerava sucesso qualquer 200. Como
+o container antigo continua no ar quando um deploy falha, o check passava
+felizmente servindo código velho. Agora `/api/version` devolve o
+`APP_COMMIT_SHA` gravado no build da imagem, e o deploy só passa quando o commit
+servido é o que acabou de ser publicado.
+
+## 12. O CT do runner (ct-web) não tem Node instalado
+E é de propósito: a única versão de Node que importa é a da imagem que vai para
+produção. Por isso o passo de validação do workflow roda dentro de um
+`docker run --rm node:22-alpine`. Adicionar `run: npm ...` direto no workflow
+falha com `command not found`.

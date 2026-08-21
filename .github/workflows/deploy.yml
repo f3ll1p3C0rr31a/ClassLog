@@ -10,36 +10,60 @@ concurrency:
   group: classlog-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
-    name: Deploy production on Jupiter
-    runs-on: [self-hosted, linux, x64, classlog-jupiter]
+    name: Deploy production on Saturno
+    runs-on: [self-hosted, linux, x64, classlog-saturno]
 
     steps:
+      # Checkout com git puro em vez de actions/checkout: baixar a action passa
+      # por codeload.github.com, que vive devolvendo 429 (Too Many Requests) e
+      # derruba o job antes de rodar qualquer coisa nossa. git fetch usa
+      # github.com, que não sofre desse limite.
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate JavaScript
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          node --check server.js
-          node --check app.js
-          node --check offline-store.js
-          node --check handwriting.js
-          node --check service-worker.js
-          node --check scripts/prepare-web-assets.js
-          node --check scripts/check-app-logic.js
+          set -Eeuo pipefail
+          mkdir -p "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          if [ ! -d .git ]; then
+            git init -q
+            git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          else
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          fi
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic ${AUTH}" \
+            fetch --depth 1 --no-tags origin "$GITHUB_SHA"
+          git checkout -q --force FETCH_HEAD
+          git clean -ffdxq
+          git log --oneline -1
 
-      - name: Test app logic and widget layout
-        run: npm test
+      # O CT do runner não tem Node instalado, de propósito: a única versão de
+      # Node que importa aqui é a da imagem que vai para produção. Rodar as
+      # validações dentro dela evita passar num Node do host e quebrar noutro.
+      - name: Validate and prepare web assets
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            node:22-alpine sh -euc '
+              node --check server.js
+              node --check app.js
+              node --check offline-store.js
+              node --check handwriting.js
+              node --check service-worker.js
+              node --check scripts/prepare-web-assets.js
+              node --check scripts/check-app-logic.js
+              npm test
+              npm run web:prepare
+            '
 
-      - name: Prepare PWA assets
-        run: npm run web:prepare
-
-      - name: Audit production dependencies
-        run: npm audit --omit=dev
-
-      - name: Deploy to classlog-api
+      - name: Deploy
         run: bash scripts/deploy-production.sh

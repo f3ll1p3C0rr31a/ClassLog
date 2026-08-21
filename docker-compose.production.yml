@@ -1,0 +1,34 @@
+# Produção (Saturno, CT 101 "ct-web").
+#
+# O caminho absoluto do servidor entra por CLASSLOG_APP_DIR para que o mesmo
+# arquivo sirva a dois lugares: o deploy roda de dentro de
+# /dados/sites/classlog/app (variável ausente → "."), e a cópia usada pelo
+# Dockge vive em /opt/stacks/classlog, onde o .env aponta a variável para o
+# checkout.
+services:
+  classlog-api:
+    build:
+      context: ${CLASSLOG_APP_DIR:-.}
+      args:
+        APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+    image: classlog-api:latest
+    container_name: classlog-api
+    restart: unless-stopped
+    env_file:
+      - ${CLASSLOG_APP_DIR:-.}/.env
+    environment:
+      PORT: 3000
+      CLASSLOG_DATA_DIR: /app/data
+      APP_COMMIT_SHA: ${APP_COMMIT_SHA:-unknown}
+      TZ: America/Sao_Paulo
+    volumes:
+      # O banco é um JSON único no host e é o único estado que sobrevive ao
+      # deploy. Fora da imagem de propósito: rebuild não pode encostar nele.
+      - ${CLASSLOG_DATA_DIR_HOST:-/dados/sites/classlog/data}:/app/data
+    ports:
+      # 8097 é o que o Caddy do ct-proxy encaminha para classlog.fellipecorreia.com
+      - "8097:3000"
+    networks: [interna]
+
+networks:
+  interna:
