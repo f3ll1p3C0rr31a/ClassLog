@@ -19,7 +19,7 @@
           <p class="hero-copy" id="pageDescription">Filtre por aluno, data, tipo de ocorrência e turma.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.3.1 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.4.0 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -51,6 +51,7 @@
         <a class="step-link" href="finalize.html">Informações</a>
         <a class="step-link active" href="history.html">Histórico</a>
         <a class="step-link" href="grades.html">Menções</a>
+        <a class="step-link" href="schedule.html">Horário</a>
         <a class="step-link" href="settings.html">Configuração</a>
       </nav>
 
@@ -68,12 +69,28 @@
         <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
         <div class="history-filter-grid">
           <label class="field">
-            <span>Aluno ou turma</span>
-            <input id="historyStudentFilter" type="search" placeholder="Digite um nome..." />
+            <span>Foco do relatório</span>
+            <select id="historySubjectType">
+              <option value="">Todos</option>
+              <option value="student">Aluno</option>
+              <option value="class">Turma</option>
+            </select>
+          </label>
+          <label class="field hidden" id="historySubjectField">
+            <span>Selecione</span>
+            <select id="historySubjectSelect"></select>
           </label>
           <label class="field">
-            <span>Data</span>
-            <input id="historyDateFilter" type="date" />
+            <span>Bimestre</span>
+            <select id="historyTermFilter"></select>
+          </label>
+          <label class="field">
+            <span>De</span>
+            <input id="historyDateFrom" type="date" />
+          </label>
+          <label class="field">
+            <span>Até</span>
+            <input id="historyDateTo" type="date" />
           </label>
           <label class="field">
             <span>Tipo de ocorrência</span>
@@ -91,12 +108,46 @@
               <option value="daily">Registro de Diário</option>
             </select>
           </label>
+          <label class="field">
+            <span>Status</span>
+            <select id="historyStatusFilter">
+              <option value="">Todos</option>
+              <option value="aberta">Aberta</option>
+              <option value="em_andamento">Em andamento</option>
+              <option value="aguardando_retorno">Aguardando retorno</option>
+              <option value="encaminhada">Encaminhada</option>
+              <option value="concluida">Concluída</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Busca livre</span>
+            <input id="historyStudentFilter" type="search" placeholder="Digite um nome..." />
+          </label>
+          <label class="field toggle-field">
+            <input id="historyIncludeDeleted" type="checkbox" />
+            <span>Mostrar registros excluídos</span>
+          </label>
+          <label class="field toggle-field hidden" id="historyIncludeClassField">
+            <input id="historyIncludeClass" type="checkbox" checked />
+            <span>Incluir registros da turma inteira</span>
+          </label>
         </div>
-        <p class="hint" id="historyHint">Selecione um aluno para ver o histórico filtrado.</p>
+        <p class="hint" id="historyHint">Escolha um aluno ou turma para ver tudo que se relaciona a ele.</p>
         <div class="page-actions split-actions">
           <button class="ghost-button" type="button" id="historyBackButton">Voltar</button>
           <button class="ghost-button" type="button" id="historyClearFilters">Limpar filtros</button>
+          <button class="primary-button" type="button" id="historyExportButton">Exportar PDF</button>
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Relatório</p>
+            <h2>Resumo do recorte</h2>
+          </div>
+        </div>
+        <div id="historySummary"></div>
       </section>
 
       <section class="panel">

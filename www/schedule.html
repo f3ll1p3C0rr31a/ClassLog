@@ -10,13 +10,13 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-page="students">
+  <body data-page="schedule">
     <main class="app-shell">
       <section class="hero-card">
         <div>
-          <p class="eyebrow" id="pageSubtitle">Etapa 1</p>
-          <h1 id="pageTitle">Selecionar alunos</h1>
-          <p class="hero-copy" id="pageDescription">Escolha alunos ou uma turma para iniciar o Log.</p>
+          <p class="eyebrow" id="pageSubtitle">Horário</p>
+          <h1 id="pageTitle">Grade da semana</h1>
+          <p class="hero-copy" id="pageDescription">Aula atual, próximos blocos e a grade completa.</p>
         </div>
         <div class="hero-actions">
           <span class="version-badge" id="versionBadge">v1.4.0 · ALPHA</span>
@@ -46,66 +46,75 @@
       </section>
 
       <nav class="step-nav">
-        <a class="step-link active" href="index.html">Alunos</a>
+        <a class="step-link" href="index.html">Alunos</a>
         <a class="step-link" href="occurrence.html">Log</a>
         <a class="step-link" href="finalize.html">Informações</a>
         <a class="step-link" href="history.html">Histórico</a>
         <a class="step-link" href="grades.html">Menções</a>
-        <a class="step-link" href="schedule.html">Horário</a>
+        <a class="step-link active" href="schedule.html">Horário</a>
         <a class="step-link" href="settings.html">Configuração</a>
       </nav>
 
-      <section class="panel" id="studentsPanel">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Etapa 1</p>
-            <h2>Seleção rápida</h2>
-          </div>
-          <button class="ghost-button" type="button" id="clearStudentButton">Limpar</button>
-        </div>
-        <div class="panel-subsection class-section">
-          <div class="panel-head class-section-head">
+      <section class="panel schedule-hero-panel">
+        <div id="scheduleNow"></div>
+        <div class="panel-subsection">
+          <div class="panel-head">
             <div>
-              <p class="eyebrow">Turma</p>
-              <h2>Escolha o ano</h2>
+              <p class="eyebrow">A seguir</p>
+              <h2>Próximos blocos</h2>
             </div>
-            <p class="hint class-hint" id="classHint">Selecione uma turma para começar.</p>
           </div>
-          <div class="chips class-tabs" id="classTabs" aria-live="polite"></div>
-        </div>
-        <label class="field">
-          <span>Buscar nome</span>
-          <input id="studentSearch" type="search" placeholder="Digite para filtrar..." autocomplete="off" />
-        </label>
-        <div class="selection-summary" id="selectedStudentsStrip" aria-live="polite"></div>
-        <div class="chips" id="studentChips" aria-live="polite"></div>
-        <div class="page-actions">
-          <button class="primary-button" type="button" id="studentNextButton">Ir para Log</button>
+          <div class="schedule-upcoming" id="scheduleUpcoming"></div>
         </div>
       </section>
 
-      <section class="panel hidden" id="disciplinaryPanel">
+      <section class="panel">
         <div class="panel-head">
           <div>
-            <p class="eyebrow">Disciplina</p>
-            <h2>Momento disciplinar</h2>
+            <p class="eyebrow">Semana</p>
+            <h2>Grade completa</h2>
           </div>
         </div>
+        <div id="scheduleGrid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Editor</p>
+            <h2>Montar a grade</h2>
+          </div>
+        </div>
+
         <div class="grid-two">
           <label class="field">
-            <span>Dias úteis</span>
-            <input id="disciplinaryDays" type="number" min="1" step="1" value="1" />
+            <span>Avisar antes de cada aula</span>
+            <select id="scheduleReminderMinutes">
+              <option value="0">Na hora</option>
+              <option value="5">5 minutos antes</option>
+              <option value="10">10 minutos antes</option>
+              <option value="15">15 minutos antes</option>
+              <option value="30">30 minutos antes</option>
+            </select>
           </label>
           <label class="field">
-            <span>Observação interna</span>
-            <input id="disciplinaryNote" type="text" placeholder="Ex.: reforço de combinados em sala" />
+            <span>Resumo do dia às</span>
+            <input id="scheduleSummaryTime" type="time" />
+          </label>
+          <label class="field toggle-field">
+            <input id="scheduleNotificationsToggle" type="checkbox" />
+            <span>Notificações do horário ligadas</span>
           </label>
         </div>
-        <div class="page-actions split-actions">
-          <button class="primary-button" type="button" id="disciplinaryButton">Aplicar aos selecionados</button>
+
+        <div class="chips" id="scheduleWeekdayTabs"></div>
+        <div class="schedule-editor" id="scheduleEditor"></div>
+
+        <div class="page-actions split-actions hidden" id="scheduleEditorActions">
+          <button class="ghost-button" type="button" id="scheduleAddButton">Adicionar bloco</button>
+          <button class="primary-button" type="button" id="scheduleSaveButton">Salvar grade</button>
         </div>
-        <p class="hint" id="disciplinaryHint">Contagem em dias úteis, com exclusão de finais de semana e feriados cadastrados.</p>
-        <div class="chips" id="disciplinaryList" aria-live="polite"></div>
+        <p class="hint" id="scheduleEditorHint">A grade é compartilhada entre a web, o app e o widget do Android.</p>
       </section>
     </main>
 

@@ -176,7 +176,7 @@ const storageKeys = {
   locationPrefill: 'classlog-location-prefill-v1',
 };
 
-const appVersion = '1.3.1';
+const appVersion = '1.4.0';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -189,6 +189,7 @@ const pageMap = {
   finalize: 'finalize.html',
   history: 'history.html',
   grades: 'grades.html',
+  schedule: 'schedule.html',
   settings: 'settings.html',
 };
 
@@ -231,13 +232,24 @@ const state = {
   gradeSelection: new Set(),
   gradeBulkEditMode: false,
   gradeBulkPatch: null,
+  timetableDraft: [],
+  timetableDirty: false,
+  scheduleEditorWeekday: 1,
+  scheduleTicker: null,
   historyMode: 'selected',
   historyFilters: {
+    subjectType: '',
+    subject: '',
+    includeClassWide: true,
+    termKey: '',
+    dateFrom: '',
+    dateTo: '',
     student: '',
-    date: '',
     occurrence: '',
     classKey: '',
     recordKind: '',
+    status: '',
+    includeDeleted: false,
   },
   authUser: null,
   mobileToken: '',
@@ -315,12 +327,35 @@ const elements = {
   handwritingEntry: $('handwritingEntry'),
   finalizeBackButton: $('finalizeBackButton'),
   saveButton: $('saveButton'),
+  scheduleNow: $('scheduleNow'),
+  scheduleUpcoming: $('scheduleUpcoming'),
+  scheduleGrid: $('scheduleGrid'),
+  scheduleEditor: $('scheduleEditor'),
+  scheduleEditorActions: $('scheduleEditorActions'),
+  scheduleEditorHint: $('scheduleEditorHint'),
+  scheduleWeekdayTabs: $('scheduleWeekdayTabs'),
+  scheduleAddButton: $('scheduleAddButton'),
+  scheduleSaveButton: $('scheduleSaveButton'),
+  scheduleNotificationsToggle: $('scheduleNotificationsToggle'),
+  scheduleReminderMinutes: $('scheduleReminderMinutes'),
+  scheduleSummaryTime: $('scheduleSummaryTime'),
   historyHint: $('historyHint'),
   historySelectedButton: $('historySelectedButton'),
   historyAllButton: $('historyAllButton'),
   historyBackButton: $('historyBackButton'),
   historyStudentFilter: $('historyStudentFilter'),
-  historyDateFilter: $('historyDateFilter'),
+  historySubjectType: $('historySubjectType'),
+  historySubjectSelect: $('historySubjectSelect'),
+  historySubjectField: $('historySubjectField'),
+  historyIncludeClass: $('historyIncludeClass'),
+  historyIncludeDeleted: $('historyIncludeDeleted'),
+  historyIncludeClassField: $('historyIncludeClassField'),
+  historyTermFilter: $('historyTermFilter'),
+  historyDateFrom: $('historyDateFrom'),
+  historyDateTo: $('historyDateTo'),
+  historyStatusFilter: $('historyStatusFilter'),
+  historySummary: $('historySummary'),
+  historyExportButton: $('historyExportButton'),
   historyOccurrenceFilter: $('historyOccurrenceFilter'),
   historyClassFilter: $('historyClassFilter'),
   historyKindFilter: $('historyKindFilter'),
@@ -978,7 +1013,8 @@ function updateHeader() {
     students: ['Etapa 1', `Selecionar alunos ou turma - ${schoolName}`, 'Escolha alunos ou a turma inteira para iniciar o Log.'],
     occurrence: ['Etapa 2', `Tipo de Log - ${schoolName}`, 'Selecione uma ou mais ocorrências ou use o Registro de Diário.'],
     finalize: ['Etapa 3', `Informações - ${schoolName}`, 'Revise data, local, foto e observação antes de salvar.'],
-    history: ['Histórico', `Logs - ${schoolName}`, 'Filtre os registros por aluno, data, tipo e turma.'],
+    history: ['Histórico', `Relatórios - ${schoolName}`, 'Escolha um aluno ou turma, recorte por bimestre e exporte em PDF.'],
+    schedule: ['Horário', `Grade da semana - ${schoolName}`, 'Aula atual, próximos blocos e a grade completa.'],
     grades: ['Menções', `Notas - ${schoolName}`, 'Acompanhe cálculo automático, ajustes manuais e fechamento bimestral.'],
     settings: ['Configurações', 'Painel da coordenação', 'Ajuste regras e visual por escola.'],
   };
@@ -1367,40 +1403,6 @@ async function autoPrefillFinalizeContext() {
   if (canTryCapture) {
     await captureLocation({ silent: true, updateButton: false });
   }
-}
-
-function getFilteredReports() {
-  const schoolReports = state.reports.filter((report) => {
-    if (!report.schoolId) return true;
-    return report.schoolId === state.selectedSchoolId;
-  });
-
-  let filtered = schoolReports;
-  if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
-    const selectedNames = new Set(state.selectedStudents);
-    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => selectedNames.has(student.fullName)));
-  }
-
-  const filters = state.historyFilters;
-  if (filters.student) {
-    const query = normalizeKey(filters.student);
-    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => (
-      normalizeKey(student.displayName).includes(query) || normalizeKey(student.fullName).includes(query)
-    )));
-  }
-  if (filters.date) {
-    filtered = filtered.filter((report) => String(report.occurredAt || '').slice(0, 10) === filters.date);
-  }
-  if (filters.occurrence) {
-    filtered = filtered.filter((report) => (report.occurrenceTypes || [report.occurrenceLabel]).includes(filters.occurrence));
-  }
-  if (filters.classKey) {
-    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => student.classKey === filters.classKey));
-  }
-  if (filters.recordKind) {
-    filtered = filtered.filter((report) => (report.recordKind || 'occurrence') === filters.recordKind);
-  }
-  return filtered;
 }
 
 function mentionFromPoints(points) {
@@ -1962,10 +1964,456 @@ function renderHandwritingEntry() {
   });
 }
 
+/* ==========================================================================
+   Relatórios do histórico
+   O foco (aluno/turma) + bimestre monta o recorte; o resumo e o PDF saem
+   sempre do mesmo conjunto filtrado, para o papel bater com a tela.
+   ========================================================================== */
+
+function getHistoryFocusLabel() {
+  const filters = state.historyFilters;
+  if (filters.subjectType === 'student' && filters.subject) {
+    return getStudentMap().get(filters.subject)?.displayName || filters.subject;
+  }
+  if (filters.subjectType === 'class' && filters.subject) {
+    return getCurrentClassGroups().find((group) => group.key === filters.subject)?.label || filters.subject;
+  }
+  return 'Todos os alunos';
+}
+
+function getHistoryPeriodRange() {
+  const filters = state.historyFilters;
+  const term = getTermDateRange(filters.termKey);
+  let start = term ? term.start : null;
+  let end = term ? term.end : null;
+
+  if (filters.dateFrom) {
+    const from = new Date(`${filters.dateFrom}T00:00:00`);
+    if (!Number.isNaN(from.getTime())) start = !start || from > start ? from : start;
+  }
+  if (filters.dateTo) {
+    const to = new Date(`${filters.dateTo}T00:00:00`);
+    if (!Number.isNaN(to.getTime())) {
+      to.setDate(to.getDate() + 1);
+      end = !end || to < end ? to : end;
+    }
+  }
+  return { start, end };
+}
+
+function describeHistoryPeriod() {
+  const filters = state.historyFilters;
+  const { start, end } = getHistoryPeriodRange();
+  if (!start && !end) return 'Todo o período';
+
+  const termLabel = getTermOptions().find((option) => option.value === filters.termKey)?.label;
+  const formatDay = (date, inclusiveEnd = false) => {
+    const value = new Date(date.getTime());
+    if (inclusiveEnd) value.setDate(value.getDate() - 1);
+    return value.toLocaleDateString('pt-BR');
+  };
+
+  if (termLabel && !filters.dateFrom && !filters.dateTo) return termLabel;
+  if (start && end) return `${formatDay(start)} a ${formatDay(end, true)}`;
+  if (start) return `A partir de ${formatDay(start)}`;
+  return `Até ${formatDay(end, true)}`;
+}
+
+// Um registro "pertence" ao aluno quando ele está citado nominalmente ou quando
+// a turma dele inteira foi registrada — as duas coisas contam no histórico dele.
+function reportMatchesStudent(report, fullName, includeClassWide) {
+  const targets = report.selectedStudents || [];
+  if (targets.some((student) => student.fullName === fullName && student.targetType !== 'class')) return true;
+  if (!includeClassWide) return false;
+
+  const studentClassKey = getStudentMap().get(fullName)?.classKey;
+  if (!studentClassKey) return false;
+  return targets.some((student) => student.targetType === 'class' && student.classKey === studentClassKey);
+}
+
+function getFilteredReports() {
+  const schoolReports = state.reports.filter((report) => {
+    if (!report.schoolId) return true;
+    return report.schoolId === state.selectedSchoolId;
+  });
+
+  let filtered = schoolReports;
+  const filters = state.historyFilters;
+
+  if (filters.subjectType === 'student' && filters.subject) {
+    filtered = filtered.filter((report) => reportMatchesStudent(report, filters.subject, filters.includeClassWide !== false));
+  } else if (filters.subjectType === 'class' && filters.subject) {
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => student.classKey === filters.subject));
+  } else if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
+    const selectedNames = new Set(state.selectedStudents);
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => selectedNames.has(student.fullName)));
+  }
+
+  const { start, end } = getHistoryPeriodRange();
+  if (start || end) {
+    filtered = filtered.filter((report) => {
+      const when = new Date(report.occurredAt || report.createdAt);
+      if (Number.isNaN(when.getTime())) return false;
+      if (start && when < start) return false;
+      if (end && when >= end) return false;
+      return true;
+    });
+  }
+
+  if (filters.student) {
+    const query = normalizeKey(filters.student);
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => (
+      normalizeKey(student.displayName).includes(query) || normalizeKey(student.fullName).includes(query)
+    )));
+  }
+  if (filters.occurrence) {
+    filtered = filtered.filter((report) => (report.occurrenceTypes || [report.occurrenceLabel]).includes(filters.occurrence));
+  }
+  if (filters.classKey) {
+    filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => student.classKey === filters.classKey));
+  }
+  if (filters.recordKind) {
+    filtered = filtered.filter((report) => (report.recordKind || 'occurrence') === filters.recordKind);
+  }
+  if (filters.status) {
+    filtered = filtered.filter((report) => (report.status || 'aberta') === filters.status);
+  }
+  if (!filters.includeDeleted) {
+    filtered = filtered.filter((report) => !report.deletedAt);
+  }
+
+  return filtered.sort((a, b) => new Date(b.occurredAt || b.createdAt) - new Date(a.occurredAt || a.createdAt));
+}
+
+function summarizeReports(reports) {
+  const byType = new Map();
+  const byStudent = new Map();
+  const byMonth = new Map();
+  let positive = 0;
+  let negative = 0;
+  let daily = 0;
+
+  reports.forEach((report) => {
+    const kind = report.recordKind === 'daily' ? 'daily' : 'occurrence';
+    if (kind === 'daily') daily += 1;
+
+    const types = report.occurrenceTypes || (report.occurrenceLabel ? [report.occurrenceLabel] : []);
+    types.forEach((type) => {
+      byType.set(type, (byType.get(type) || 0) + 1);
+      if (kind === 'occurrence') {
+        if (positiveOccurrenceTypes.includes(type)) positive += 1;
+        else negative += 1;
+      }
+    });
+
+    (report.selectedStudents || []).forEach((student) => {
+      const key = student.displayName || student.fullName;
+      byStudent.set(key, (byStudent.get(key) || 0) + 1);
+    });
+
+    const when = new Date(report.occurredAt || report.createdAt);
+    if (!Number.isNaN(when.getTime())) {
+      const monthKey = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}`;
+      byMonth.set(monthKey, (byMonth.get(monthKey) || 0) + 1);
+    }
+  });
+
+  const sortDesc = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]);
+
+  return {
+    total: reports.length,
+    daily,
+    occurrences: reports.length - daily,
+    positive,
+    negative,
+    byType: sortDesc(byType),
+    byStudent: sortDesc(byStudent),
+    byMonth: [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  };
+}
+
+function renderHistorySubjectControls() {
+  if (!elements.historySubjectType || !elements.historySubjectSelect) return;
+
+  const filters = state.historyFilters;
+  elements.historySubjectType.value = filters.subjectType || '';
+
+  const select = elements.historySubjectSelect;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+
+  if (filters.subjectType === 'student') {
+    placeholder.textContent = 'Escolha um aluno';
+    select.appendChild(placeholder);
+    getStudentRoster().filter((student) => student.targetType === 'student').forEach((student) => {
+      const option = document.createElement('option');
+      option.value = student.fullName;
+      option.textContent = `${student.displayName} · ${student.classLabel}`;
+      select.appendChild(option);
+    });
+  } else if (filters.subjectType === 'class') {
+    placeholder.textContent = 'Escolha uma turma';
+    select.appendChild(placeholder);
+    getCurrentClassGroups().forEach((group) => {
+      const option = document.createElement('option');
+      option.value = group.key;
+      option.textContent = group.label;
+      select.appendChild(option);
+    });
+  } else {
+    placeholder.textContent = 'Todos';
+    select.appendChild(placeholder);
+  }
+
+  select.value = filters.subject || '';
+  select.disabled = !filters.subjectType;
+
+  if (elements.historySubjectField) {
+    elements.historySubjectField.classList.toggle('hidden', !filters.subjectType);
+  }
+  if (elements.historyIncludeClassField) {
+    elements.historyIncludeClassField.classList.toggle('hidden', filters.subjectType !== 'student');
+  }
+  if (elements.historyIncludeClass) {
+    elements.historyIncludeClass.checked = filters.includeClassWide !== false;
+  }
+  if (elements.historyIncludeDeleted) {
+    elements.historyIncludeDeleted.checked = Boolean(filters.includeDeleted);
+  }
+}
+
+function renderHistorySummary(reports) {
+  if (!elements.historySummary) return;
+
+  const summary = summarizeReports(reports);
+  elements.historySummary.innerHTML = '';
+
+  const tiles = [
+    { label: 'Registros', value: summary.total },
+    { label: 'Ocorrências', value: summary.occurrences },
+    { label: 'Diário', value: summary.daily },
+    { label: 'Positivas', value: summary.positive },
+    { label: 'Negativas', value: summary.negative },
+  ];
+
+  const tileWrap = document.createElement('div');
+  tileWrap.className = 'report-tiles';
+  tiles.forEach((tile) => {
+    const article = document.createElement('article');
+    const value = document.createElement('span');
+    value.textContent = String(tile.value);
+    const label = document.createElement('small');
+    label.textContent = tile.label;
+    article.append(value, label);
+    tileWrap.appendChild(article);
+  });
+  elements.historySummary.appendChild(tileWrap);
+
+  const makeRanking = (title, rows, emptyText) => {
+    const box = document.createElement('div');
+    box.className = 'report-ranking';
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    box.appendChild(heading);
+
+    if (rows.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'hint';
+      empty.textContent = emptyText;
+      box.appendChild(empty);
+      return box;
+    }
+
+    const max = rows[0][1] || 1;
+    rows.slice(0, 8).forEach(([label, count]) => {
+      const row = document.createElement('div');
+      row.className = 'report-ranking-row';
+      const name = document.createElement('span');
+      name.textContent = label;
+      const bar = document.createElement('div');
+      bar.className = 'report-bar';
+      const fill = document.createElement('span');
+      fill.style.width = `${Math.round((count / max) * 100)}%`;
+      bar.appendChild(fill);
+      const value = document.createElement('strong');
+      value.textContent = String(count);
+      row.append(name, bar, value);
+      box.appendChild(row);
+    });
+    return box;
+  };
+
+  const grid = document.createElement('div');
+  grid.className = 'report-ranking-grid';
+  grid.appendChild(makeRanking('Por tipo', summary.byType, 'Nada no período.'));
+  grid.appendChild(makeRanking('Por aluno', summary.byStudent, 'Nada no período.'));
+  elements.historySummary.appendChild(grid);
+
+  if (summary.byMonth.length > 0) {
+    const monthly = makeRanking(
+      'Por mês',
+      summary.byMonth.map(([key, count]) => {
+        const [year, month] = key.split('-');
+        const date = new Date(Number(year), Number(month) - 1, 1);
+        return [date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }), count];
+      }).sort((a, b) => b[1] - a[1]),
+      'Nada no período.',
+    );
+    elements.historySummary.appendChild(monthly);
+  }
+}
+
+/* ---------- Exportação em PDF ---------- */
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildHistoryReportDocument(reports) {
+  const summary = summarizeReports(reports);
+  const school = getActiveSchool();
+  const focus = getHistoryFocusLabel();
+  const period = describeHistoryPeriod();
+  const generatedAt = new Date().toLocaleString('pt-BR');
+  const primary = school?.palette?.primary || '#0f4ea8';
+
+  const rows = reports.map((report) => {
+    const students = (report.selectedStudents || [])
+      .map((student) => (student.targetType === 'class' ? `${student.displayName} (turma)` : student.displayName))
+      .join(', ');
+    const when = new Date(report.occurredAt || report.createdAt);
+    const comments = (report.comments || []).map((comment) => `${comment.createdByName || 'Sistema'}: ${comment.text}`).join(' | ');
+    return `
+      <tr>
+        <td class="nowrap">${escapeHtml(Number.isNaN(when.getTime()) ? '--' : when.toLocaleString('pt-BR'))}</td>
+        <td>${escapeHtml(students)}</td>
+        <td>${escapeHtml(report.recordKind === 'daily' ? 'Registro de Diário' : report.occurrenceLabel || '')}</td>
+        <td>${escapeHtml(statusLabel(report.status))}</td>
+        <td>${escapeHtml(report.notes || '')}${comments ? `<br /><em>${escapeHtml(comments)}</em>` : ''}</td>
+      </tr>`;
+  }).join('');
+
+  const typeRows = summary.byType.map(([type, count]) => `<tr><td>${escapeHtml(type)}</td><td class="num">${count}</td></tr>`).join('');
+  const studentRows = summary.byStudent.map(([name, count]) => `<tr><td>${escapeHtml(name)}</td><td class="num">${count}</td></tr>`).join('');
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Relatório ClassLog — ${escapeHtml(focus)}</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #16202c; font-size: 11px; margin: 0; }
+  header { border-bottom: 3px solid ${primary}; padding-bottom: 10px; margin-bottom: 16px; }
+  h1 { font-size: 19px; margin: 0 0 4px; color: ${primary}; }
+  .meta { display: flex; flex-wrap: wrap; gap: 14px; color: #4a5a6b; font-size: 10px; }
+  h2 { font-size: 13px; margin: 18px 0 8px; color: ${primary}; }
+  .tiles { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tiles div { border: 1px solid #d8e0ea; border-radius: 8px; padding: 8px 12px; min-width: 84px; }
+  .tiles strong { display: block; font-size: 18px; color: ${primary}; }
+  .tiles small { color: #5a6b7d; text-transform: uppercase; letter-spacing: .04em; font-size: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { border: 1px solid #d8e0ea; padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #eef3f9; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; width: 60px; }
+  td.nowrap { white-space: nowrap; }
+  tr { break-inside: avoid; }
+  .side-by-side { display: flex; gap: 14px; }
+  .side-by-side > section { flex: 1; }
+  footer { margin-top: 18px; border-top: 1px solid #d8e0ea; padding-top: 8px; color: #7c8b9b; font-size: 9px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Relatório de ocorrências</h1>
+    <div class="meta">
+      <span><strong>Foco:</strong> ${escapeHtml(focus)}</span>
+      <span><strong>Escola:</strong> ${escapeHtml(school?.name || '--')}</span>
+      <span><strong>Período:</strong> ${escapeHtml(period)}</span>
+      <span><strong>Emitido em:</strong> ${escapeHtml(generatedAt)}</span>
+      <span><strong>Por:</strong> ${escapeHtml(state.authUser?.displayName || '--')}</span>
+    </div>
+  </header>
+
+  <h2>Resumo</h2>
+  <div class="tiles">
+    <div><strong>${summary.total}</strong><small>Registros</small></div>
+    <div><strong>${summary.occurrences}</strong><small>Ocorrências</small></div>
+    <div><strong>${summary.daily}</strong><small>Diário</small></div>
+    <div><strong>${summary.positive}</strong><small>Positivas</small></div>
+    <div><strong>${summary.negative}</strong><small>Negativas</small></div>
+  </div>
+
+  <div class="side-by-side">
+    <section>
+      <h2>Por tipo</h2>
+      <table><thead><tr><th>Tipo</th><th class="num">Qtd.</th></tr></thead><tbody>${typeRows || '<tr><td colspan="2">Nada no período.</td></tr>'}</tbody></table>
+    </section>
+    <section>
+      <h2>Por aluno</h2>
+      <table><thead><tr><th>Aluno</th><th class="num">Qtd.</th></tr></thead><tbody>${studentRows || '<tr><td colspan="2">Nada no período.</td></tr>'}</tbody></table>
+    </section>
+  </div>
+
+  <h2>Registros (${summary.total})</h2>
+  <table>
+    <thead><tr><th>Quando</th><th>Aluno(s)</th><th>Tipo</th><th>Status</th><th>Observações</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5">Nenhum registro no período.</td></tr>'}</tbody>
+  </table>
+
+  <footer>ClassLog v${escapeHtml(appVersion)} · documento gerado automaticamente a partir dos filtros aplicados na guia Histórico.</footer>
+</body>
+</html>`;
+}
+
+async function exportHistoryReport() {
+  const reports = getFilteredReports();
+  const html = buildHistoryReportDocument(reports);
+  const fileName = `ClassLog - ${getHistoryFocusLabel()} - ${describeHistoryPeriod()}`.replace(/[\\/:*?"<>|]/g, '-');
+
+  if (isNativeApp()) {
+    try {
+      await callNative('printDocument', { html, fileName });
+      return;
+    } catch {
+      showToast('Não foi possível abrir a impressão do Android.');
+      return;
+    }
+  }
+
+  // Um iframe fora da tela evita bloqueio de pop-up e não leva o CSS do app junto.
+  const frame = document.createElement('iframe');
+  frame.style.position = 'fixed';
+  frame.style.right = '0';
+  frame.style.bottom = '0';
+  frame.style.width = '0';
+  frame.style.height = '0';
+  frame.style.border = '0';
+  document.body.appendChild(frame);
+
+  frame.onload = () => {
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch {
+      showToast('Seu navegador bloqueou a impressão.');
+    }
+    window.setTimeout(() => frame.remove(), 60000);
+  };
+  frame.srcdoc = html;
+}
+
 function renderHistoryFilters() {
   if (!elements.historyOccurrenceFilter) return;
 
   const setOptions = (select, options, placeholder, selectedValue) => {
+    if (!select) return;
     select.innerHTML = '';
     const empty = document.createElement('option');
     empty.value = '';
@@ -1992,9 +2440,19 @@ function renderHistoryFilters() {
     'Todas as turmas',
     state.historyFilters.classKey,
   );
+  setOptions(
+    elements.historyTermFilter,
+    getTermOptions(),
+    'Todos os bimestres',
+    state.historyFilters.termKey,
+  );
+
   if (elements.historyStudentFilter) elements.historyStudentFilter.value = state.historyFilters.student;
-  if (elements.historyDateFilter) elements.historyDateFilter.value = state.historyFilters.date;
+  if (elements.historyDateFrom) elements.historyDateFrom.value = state.historyFilters.dateFrom;
+  if (elements.historyDateTo) elements.historyDateTo.value = state.historyFilters.dateTo;
   if (elements.historyKindFilter) elements.historyKindFilter.value = state.historyFilters.recordKind;
+  if (elements.historyStatusFilter) elements.historyStatusFilter.value = state.historyFilters.status;
+  renderHistorySubjectControls();
 }
 
 function renderHistory() {
@@ -2002,13 +2460,18 @@ function renderHistory() {
 
   const filteredReports = getFilteredReports();
   renderHistoryFilters();
+  renderHistorySummary(filteredReports);
   elements.records.innerHTML = '';
 
-  if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
+  if (state.historyFilters.subjectType && state.historyFilters.subject) {
+    elements.historyHint.textContent = `${filteredReports.length} registro(s) de ${getHistoryFocusLabel()} · ${describeHistoryPeriod()}.`;
+  } else if (state.historyMode === 'selected' && state.selectedStudents.length > 0) {
     elements.historyHint.textContent = `Mostrando ${filteredReports.length} Log(s) de ${summarizeSelectedStudents()}.`;
   } else {
-    elements.historyHint.textContent = `Visao geral com ${filteredReports.length} registro(s).`;
+    elements.historyHint.textContent = `Visão geral com ${filteredReports.length} registro(s) · ${describeHistoryPeriod()}.`;
   }
+
+  if (elements.historyExportButton) elements.historyExportButton.disabled = filteredReports.length === 0;
 
   if (filteredReports.length === 0) {
     const empty = document.createElement('p');
@@ -2914,6 +3377,625 @@ function updatePageState() {
   }
 }
 
+/* ==========================================================================
+   Grade horária (guia Horário, widget e notificações)
+   O mesmo JSON alimenta três consumidores: esta página, o widget nativo e o
+   agendador de notificações do Android. Mudar o formato aqui exige mexer em
+   android/app/src/main/java/com/classlog/app/Timetable.java também.
+   ========================================================================== */
+
+const weekdayLabels = { 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado', 7: 'Domingo' };
+const weekdayShortLabels = { 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb', 7: 'Dom' };
+const timetableKinds = [
+  { value: 'class', label: 'Aula' },
+  { value: 'break', label: 'Intervalo' },
+  { value: 'meal', label: 'Refeição' },
+  { value: 'university', label: 'Faculdade' },
+  { value: 'other', label: 'Outro' },
+];
+
+function getTimetable() {
+  const timetable = state.settings?.timetable;
+  const reminderMinutes = Number(timetable?.reminderMinutes);
+  return {
+    entries: Array.isArray(timetable?.entries) ? timetable.entries : [],
+    notificationsEnabled: timetable?.notificationsEnabled !== false,
+    reminderMinutes: Number.isFinite(reminderMinutes) ? reminderMinutes : 5,
+    dailySummaryTime: timetable?.dailySummaryTime || '06:30',
+  };
+}
+
+function timeToMinutes(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  return (Number(match[1]) * 60) + Number(match[2]);
+}
+
+function isoWeekday(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function formatMinutesRange(entry) {
+  return `${entry.start} – ${entry.end}`;
+}
+
+function getTimetableKindLabel(kind) {
+  return timetableKinds.find((item) => item.value === kind)?.label || 'Aula';
+}
+
+function getEntriesForWeekday(weekday) {
+  return getTimetable().entries
+    .filter((entry) => Number(entry.weekday) === Number(weekday))
+    .sort((a, b) => (timeToMinutes(a.start) - timeToMinutes(b.start)) || (timeToMinutes(a.end) - timeToMinutes(b.end)));
+}
+
+// Expande a grade semanal em ocorrências com data absoluta, a partir de `reference`.
+// É isto que permite responder "próxima aula" atravessando a virada do dia.
+function getTimetableOccurrences(reference = new Date(), daysAhead = 8) {
+  const entries = getTimetable().entries;
+  if (entries.length === 0) return [];
+
+  const occurrences = [];
+  const dayZero = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
+
+  for (let offset = 0; offset < daysAhead; offset += 1) {
+    const day = new Date(dayZero.getTime());
+    day.setDate(day.getDate() + offset);
+    const weekday = isoWeekday(day);
+
+    entries.forEach((entry) => {
+      if (Number(entry.weekday) !== weekday) return;
+      const startMinutes = timeToMinutes(entry.start);
+      const endMinutes = timeToMinutes(entry.end);
+      if (startMinutes == null || endMinutes == null) return;
+
+      const start = new Date(day.getTime());
+      start.setMinutes(startMinutes);
+      const end = new Date(day.getTime());
+      end.setMinutes(endMinutes);
+
+      occurrences.push({ entry, start, end, dayOffset: offset });
+    });
+  }
+
+  return occurrences.sort((a, b) => a.start - b.start);
+}
+
+function getTimetableStatus(reference = new Date()) {
+  const occurrences = getTimetableOccurrences(reference);
+  const current = occurrences.find((item) => item.start <= reference && reference < item.end) || null;
+  const upcoming = occurrences.filter((item) => item.start > reference);
+  return { current, next: upcoming[0] || null, upcoming, reference };
+}
+
+function describeOccurrenceDay(occurrence, reference = new Date()) {
+  if (occurrence.dayOffset === 0) return 'Hoje';
+  if (occurrence.dayOffset === 1) return 'Amanhã';
+  return weekdayLabels[isoWeekday(occurrence.start)] || '';
+}
+
+function formatCountdown(target, reference = new Date()) {
+  const totalMinutes = Math.round((target - reference) / 60000);
+  if (totalMinutes <= 0) return 'agora';
+  if (totalMinutes < 60) return `em ${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) return minutes === 0 ? `em ${hours}h` : `em ${hours}h${String(minutes).padStart(2, '0')}`;
+  const days = Math.round(hours / 24);
+  return `em ${days} dia(s)`;
+}
+
+function getEntrySchoolName(entry) {
+  if (entry.location) return entry.location;
+  const school = getSchools().find((item) => item.id === entry.schoolId);
+  return school?.name || '';
+}
+
+/* ---------- Ponte com o código nativo (widget + notificações) ---------- */
+
+// O app não empacota @capacitor/core, então window.Capacitor.Plugins fica vazio:
+// quem popula aquele objeto é o JS do core, não o native-bridge injetado no
+// WebView. A via que existe sem bundler é o nativePromise() do próprio bridge.
+function isNativeApp() {
+  return Boolean(
+    window.Capacitor?.isNativePlatform?.()
+    && typeof window.Capacitor.nativePromise === 'function',
+  );
+}
+
+function callNative(method, options = {}) {
+  if (!isNativeApp()) return null;
+  return window.Capacitor.nativePromise('ClassLogNative', method, options);
+}
+
+async function syncTimetableToNative() {
+  if (!isNativeApp()) return;
+
+  const timetable = getTimetable();
+  const schools = getSchools().reduce((acc, school) => {
+    acc[school.id] = { name: school.name, primary: school.palette?.primary || '#0f4ea8' };
+    return acc;
+  }, {});
+
+  try {
+    await callNative('setTimetable', {
+      payload: JSON.stringify({ ...timetable, schools, updatedAt: new Date().toISOString() }),
+    });
+  } catch {
+    // O app web e o app sem a permissão concedida seguem funcionando sem widget.
+  }
+}
+
+/* ---------- Renderização ---------- */
+
+function renderScheduleNow() {
+  if (!elements.scheduleNow) return;
+
+  const now = new Date();
+  const { current, upcoming } = getTimetableStatus(now);
+  elements.scheduleNow.innerHTML = '';
+
+  const card = document.createElement('article');
+  card.className = 'schedule-now-card';
+  card.dataset.kind = current ? current.entry.kind : 'idle';
+
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'schedule-now-eyebrow';
+  eyebrow.textContent = current ? 'Agora' : 'Sem aula no momento';
+
+  const title = document.createElement('h2');
+  title.className = 'schedule-now-title';
+  title.textContent = current ? current.entry.title : 'Tempo livre';
+
+  const meta = document.createElement('p');
+  meta.className = 'schedule-now-meta';
+  if (current) {
+    const place = getEntrySchoolName(current.entry);
+    meta.textContent = [formatMinutesRange(current.entry), place].filter(Boolean).join(' · ');
+  } else {
+    const next = upcoming[0];
+    meta.textContent = next ? `Próximo compromisso ${formatCountdown(next.start, now)}` : 'Nenhum bloco cadastrado na grade.';
+  }
+
+  card.append(eyebrow, title, meta);
+
+  if (current) {
+    const total = (current.end - current.start) || 1;
+    const elapsed = Math.min(Math.max(now - current.start, 0), total);
+    const progress = document.createElement('div');
+    progress.className = 'schedule-progress';
+    const bar = document.createElement('span');
+    bar.style.width = `${Math.round((elapsed / total) * 100)}%`;
+    progress.appendChild(bar);
+
+    const remaining = document.createElement('p');
+    remaining.className = 'schedule-now-remaining';
+    remaining.textContent = `Termina ${formatCountdown(current.end, now)}`;
+
+    card.append(progress, remaining);
+
+    if (current.entry.classKey) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'primary-button schedule-now-action';
+      action.textContent = 'Registrar nesta turma';
+      action.addEventListener('click', () => openTimetableClass(current.entry));
+      card.appendChild(action);
+    }
+  }
+
+  elements.scheduleNow.appendChild(card);
+
+  if (!elements.scheduleUpcoming) return;
+  elements.scheduleUpcoming.innerHTML = '';
+  const nextItems = upcoming.slice(0, 5);
+  if (nextItems.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'Nada agendado à frente.';
+    elements.scheduleUpcoming.appendChild(empty);
+    return;
+  }
+
+  nextItems.forEach((occurrence) => {
+    const row = document.createElement('article');
+    row.className = 'schedule-upcoming-row';
+    row.dataset.kind = occurrence.entry.kind;
+
+    const time = document.createElement('div');
+    time.className = 'schedule-upcoming-time';
+    const clock = document.createElement('strong');
+    clock.textContent = occurrence.entry.start;
+    const day = document.createElement('small');
+    day.textContent = describeOccurrenceDay(occurrence, now);
+    time.append(clock, day);
+
+    const body = document.createElement('div');
+    body.className = 'schedule-upcoming-body';
+    const name = document.createElement('strong');
+    name.textContent = occurrence.entry.title;
+    const detail = document.createElement('small');
+    detail.textContent = [getEntrySchoolName(occurrence.entry), formatMinutesRange(occurrence.entry)].filter(Boolean).join(' · ');
+    body.append(name, detail);
+
+    const countdown = document.createElement('span');
+    countdown.className = 'schedule-upcoming-countdown';
+    countdown.textContent = formatCountdown(occurrence.start, now);
+
+    row.append(time, body, countdown);
+    elements.scheduleUpcoming.appendChild(row);
+  });
+}
+
+function openTimetableClass(entry) {
+  if (entry.schoolId && entry.schoolId !== state.selectedSchoolId) {
+    state.selectedSchoolId = entry.schoolId;
+    state.manualSchoolSelection = true;
+    rebuildSchoolDependentState();
+  }
+  state.selectedClass = entry.classKey;
+  state.selectedStudents = [];
+  saveDraft();
+  navigate('students');
+}
+
+function renderScheduleGrid() {
+  if (!elements.scheduleGrid) return;
+
+  const entries = getTimetable().entries;
+  elements.scheduleGrid.innerHTML = '';
+
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'Nenhum bloco cadastrado. Use o editor abaixo para montar a grade.';
+    elements.scheduleGrid.appendChild(empty);
+    return;
+  }
+
+  const weekdays = [...new Set(entries.map((entry) => Number(entry.weekday)))].sort((a, b) => a - b);
+  const visibleWeekdays = weekdays.length > 0 ? weekdays : [1, 2, 3, 4, 5];
+
+  // Uma linha por faixa de horário distinta — é o que reproduz a planilha
+  // original, inclusive quando dois blocos do mesmo dia se sobrepõem.
+  const rowKeys = [...new Set(entries.map((entry) => `${entry.start}|${entry.end}`))]
+    .sort((a, b) => {
+      const [startA, endA] = a.split('|');
+      const [startB, endB] = b.split('|');
+      return (timeToMinutes(startA) - timeToMinutes(startB)) || (timeToMinutes(endA) - timeToMinutes(endB));
+    });
+
+  const now = new Date();
+  const todayWeekday = isoWeekday(now);
+  const nowMinutes = (now.getHours() * 60) + now.getMinutes();
+
+  const table = document.createElement('table');
+  table.className = 'schedule-table';
+
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const corner = document.createElement('th');
+  corner.textContent = 'Horário';
+  headRow.appendChild(corner);
+  visibleWeekdays.forEach((weekday) => {
+    const cell = document.createElement('th');
+    cell.textContent = weekdayLabels[weekday] || '';
+    if (weekday === todayWeekday) cell.classList.add('is-today');
+    headRow.appendChild(cell);
+  });
+  head.appendChild(headRow);
+
+  const body = document.createElement('tbody');
+  rowKeys.forEach((rowKey) => {
+    const [start, end] = rowKey.split('|');
+    const row = document.createElement('tr');
+
+    const timeCell = document.createElement('th');
+    timeCell.className = 'schedule-time-cell';
+    timeCell.scope = 'row';
+    const startLabel = document.createElement('strong');
+    startLabel.textContent = start;
+    const endLabel = document.createElement('small');
+    endLabel.textContent = end;
+    timeCell.append(startLabel, endLabel);
+    row.appendChild(timeCell);
+
+    visibleWeekdays.forEach((weekday) => {
+      const cell = document.createElement('td');
+      const match = entries.find((entry) => (
+        Number(entry.weekday) === weekday && entry.start === start && entry.end === end
+      ));
+
+      if (match) {
+        const chip = document.createElement('div');
+        chip.className = 'schedule-cell';
+        chip.dataset.kind = match.kind;
+        const label = document.createElement('strong');
+        label.textContent = match.title;
+        chip.appendChild(label);
+        const place = getEntrySchoolName(match);
+        if (place) {
+          const small = document.createElement('small');
+          small.textContent = place;
+          chip.appendChild(small);
+        }
+        const isNow = weekday === todayWeekday
+          && nowMinutes >= timeToMinutes(start)
+          && nowMinutes < timeToMinutes(end);
+        if (isNow) chip.classList.add('is-now');
+        cell.appendChild(chip);
+      }
+
+      if (weekday === todayWeekday) cell.classList.add('is-today');
+      row.appendChild(cell);
+    });
+
+    body.appendChild(row);
+  });
+
+  table.append(head, body);
+  const scroller = document.createElement('div');
+  scroller.className = 'schedule-table-scroller';
+  scroller.appendChild(table);
+  elements.scheduleGrid.appendChild(scroller);
+}
+
+function renderScheduleEditor() {
+  if (!elements.scheduleEditor) return;
+
+  if (!canManageSettings()) {
+    elements.scheduleEditor.innerHTML = '<p class="hint">Apenas a coordenação pode editar a grade horária.</p>';
+    if (elements.scheduleEditorActions) elements.scheduleEditorActions.classList.add('hidden');
+    return;
+  }
+
+  if (elements.scheduleEditorActions) elements.scheduleEditorActions.classList.remove('hidden');
+
+  const weekday = state.scheduleEditorWeekday;
+  const draft = state.timetableDraft;
+  const dayEntries = draft
+    .filter((entry) => Number(entry.weekday) === Number(weekday))
+    .sort((a, b) => (timeToMinutes(a.start) - timeToMinutes(b.start)));
+
+  elements.scheduleEditor.innerHTML = '';
+
+  if (dayEntries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = `Nenhum bloco em ${weekdayLabels[weekday]}.`;
+    elements.scheduleEditor.appendChild(empty);
+  }
+
+  dayEntries.forEach((entry) => {
+    const row = document.createElement('div');
+    row.className = 'schedule-edit-row';
+
+    const makeField = (labelText, control) => {
+      const label = document.createElement('label');
+      label.className = 'field';
+      const span = document.createElement('span');
+      span.textContent = labelText;
+      label.append(span, control);
+      return label;
+    };
+
+    const startInput = document.createElement('input');
+    startInput.type = 'time';
+    startInput.value = entry.start;
+    startInput.addEventListener('change', () => updateTimetableDraftEntry(entry.id, { start: startInput.value }));
+
+    const endInput = document.createElement('input');
+    endInput.type = 'time';
+    endInput.value = entry.end;
+    endInput.addEventListener('change', () => updateTimetableDraftEntry(entry.id, { end: endInput.value }));
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = entry.title;
+    titleInput.placeholder = 'Ex.: 6º Ano';
+    titleInput.addEventListener('input', () => updateTimetableDraftEntry(entry.id, { title: titleInput.value }, false));
+
+    const kindSelect = document.createElement('select');
+    timetableKinds.forEach((kind) => {
+      const option = document.createElement('option');
+      option.value = kind.value;
+      option.textContent = kind.label;
+      kindSelect.appendChild(option);
+    });
+    kindSelect.value = entry.kind;
+    kindSelect.addEventListener('change', () => updateTimetableDraftEntry(entry.id, { kind: kindSelect.value }));
+
+    const schoolSelect = document.createElement('select');
+    const noSchool = document.createElement('option');
+    noSchool.value = '';
+    noSchool.textContent = 'Sem escola';
+    schoolSelect.appendChild(noSchool);
+    getSchools().forEach((school) => {
+      const option = document.createElement('option');
+      option.value = school.id;
+      option.textContent = school.name;
+      schoolSelect.appendChild(option);
+    });
+    schoolSelect.value = entry.schoolId || '';
+    schoolSelect.addEventListener('change', () => updateTimetableDraftEntry(entry.id, { schoolId: schoolSelect.value, classKey: '' }));
+
+    const classSelect = document.createElement('select');
+    const noClass = document.createElement('option');
+    noClass.value = '';
+    noClass.textContent = 'Sem turma';
+    classSelect.appendChild(noClass);
+    getClassGroupsForSchool(entry.schoolId).forEach((group) => {
+      const option = document.createElement('option');
+      option.value = group.key;
+      option.textContent = group.label;
+      classSelect.appendChild(option);
+    });
+    classSelect.value = entry.classKey || '';
+    classSelect.addEventListener('change', () => updateTimetableDraftEntry(entry.id, { classKey: classSelect.value }, false));
+
+    const locationInput = document.createElement('input');
+    locationInput.type = 'text';
+    locationInput.value = entry.location || '';
+    locationInput.placeholder = 'Ex.: UFN';
+    locationInput.addEventListener('input', () => updateTimetableDraftEntry(entry.id, { location: locationInput.value }, false));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'ghost-button danger';
+    remove.textContent = 'Remover';
+    remove.addEventListener('click', () => {
+      state.timetableDraft = state.timetableDraft.filter((item) => item.id !== entry.id);
+      renderScheduleEditor();
+      markTimetableDirty();
+    });
+
+    row.append(
+      makeField('Início', startInput),
+      makeField('Fim', endInput),
+      makeField('Título', titleInput),
+      makeField('Tipo', kindSelect),
+      makeField('Escola', schoolSelect),
+      makeField('Turma', classSelect),
+      makeField('Local', locationInput),
+    );
+    const actions = document.createElement('div');
+    actions.className = 'schedule-edit-actions';
+    actions.appendChild(remove);
+    row.appendChild(actions);
+
+    elements.scheduleEditor.appendChild(row);
+  });
+}
+
+function updateTimetableDraftEntry(id, patch, rerender = true) {
+  state.timetableDraft = state.timetableDraft.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry));
+  markTimetableDirty();
+  if (rerender) renderScheduleEditor();
+}
+
+function markTimetableDirty() {
+  state.timetableDirty = true;
+  if (elements.scheduleEditorHint) {
+    elements.scheduleEditorHint.textContent = 'Alterações não salvas.';
+  }
+}
+
+function addTimetableDraftEntry() {
+  const weekday = Number(state.scheduleEditorWeekday);
+  const dayEntries = state.timetableDraft.filter((entry) => Number(entry.weekday) === weekday);
+  const last = dayEntries.sort((a, b) => timeToMinutes(a.end) - timeToMinutes(b.end)).slice(-1)[0];
+  const start = last?.end || '07:15';
+  const startMinutes = timeToMinutes(start) ?? 435;
+  const endMinutes = Math.min(startMinutes + 50, 23 * 60 + 59);
+  const pad = (value) => String(value).padStart(2, '0');
+
+  state.timetableDraft = [...state.timetableDraft, {
+    id: `local-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    weekday,
+    start,
+    end: `${pad(Math.floor(endMinutes / 60))}:${pad(endMinutes % 60)}`,
+    title: '',
+    kind: 'class',
+    schoolId: state.selectedSchoolId || '',
+    classKey: '',
+    location: '',
+    notes: '',
+  }];
+  renderScheduleEditor();
+  markTimetableDirty();
+}
+
+async function saveTimetable() {
+  if (!canManageSettings() || !navigator.onLine || state.isOfflineSession) {
+    if (elements.scheduleEditorHint) elements.scheduleEditorHint.textContent = 'Salvar a grade precisa de conexão.';
+    return;
+  }
+
+  const invalid = state.timetableDraft.find((entry) => (
+    !entry.title.trim() || timeToMinutes(entry.start) == null || timeToMinutes(entry.end) == null
+    || timeToMinutes(entry.end) <= timeToMinutes(entry.start)
+  ));
+  if (invalid) {
+    if (elements.scheduleEditorHint) {
+      elements.scheduleEditorHint.textContent = 'Confira os blocos: título obrigatório e fim depois do início.';
+    }
+    return;
+  }
+
+  const timetable = {
+    ...getTimetable(),
+    entries: state.timetableDraft,
+    notificationsEnabled: elements.scheduleNotificationsToggle
+      ? elements.scheduleNotificationsToggle.checked
+      : getTimetable().notificationsEnabled,
+    reminderMinutes: elements.scheduleReminderMinutes
+      ? Number(elements.scheduleReminderMinutes.value)
+      : getTimetable().reminderMinutes,
+    dailySummaryTime: elements.scheduleSummaryTime
+      ? elements.scheduleSummaryTime.value
+      : getTimetable().dailySummaryTime,
+  };
+
+  try {
+    if (elements.scheduleEditorHint) elements.scheduleEditorHint.textContent = 'Salvando...';
+    await apiRequest('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings: { schools: getSchools(), holidays: state.settings.holidays || [], timetable } }),
+    });
+    await loadContext();
+    state.timetableDraft = getTimetable().entries.map((entry) => ({ ...entry }));
+    state.timetableDirty = false;
+    await syncTimetableToNative();
+    renderAll();
+    if (elements.scheduleEditorHint) elements.scheduleEditorHint.textContent = 'Grade salva.';
+  } catch {
+    if (elements.scheduleEditorHint) elements.scheduleEditorHint.textContent = 'Falha ao salvar a grade.';
+  }
+}
+
+function renderScheduleSettings() {
+  const timetable = getTimetable();
+  if (elements.scheduleNotificationsToggle) elements.scheduleNotificationsToggle.checked = timetable.notificationsEnabled;
+  if (elements.scheduleReminderMinutes) elements.scheduleReminderMinutes.value = String(timetable.reminderMinutes);
+  if (elements.scheduleSummaryTime) elements.scheduleSummaryTime.value = timetable.dailySummaryTime;
+  if (elements.scheduleWeekdayTabs) {
+    elements.scheduleWeekdayTabs.innerHTML = '';
+    [1, 2, 3, 4, 5, 6, 7].forEach((weekday) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chip';
+      button.textContent = weekdayShortLabels[weekday];
+      button.classList.toggle('active', Number(state.scheduleEditorWeekday) === weekday);
+      button.addEventListener('click', () => {
+        state.scheduleEditorWeekday = weekday;
+        renderScheduleSettings();
+        renderScheduleEditor();
+      });
+      elements.scheduleWeekdayTabs.appendChild(button);
+    });
+  }
+}
+
+function renderSchedule() {
+  if (state.page !== 'schedule') return;
+  if (state.timetableDraft.length === 0 && !state.timetableDirty) {
+    state.timetableDraft = getTimetable().entries.map((entry) => ({ ...entry }));
+  }
+  renderScheduleNow();
+  renderScheduleGrid();
+  renderScheduleSettings();
+  renderScheduleEditor();
+}
+
+function setupScheduleTicker() {
+  if (state.page !== 'schedule' || state.scheduleTicker) return;
+  state.scheduleTicker = window.setInterval(() => {
+    renderScheduleNow();
+    renderScheduleGrid();
+  }, 30000);
+}
+
 function renderPageSpecificFields() {
   if (elements.studentSearch) elements.studentSearch.value = elements.studentSearch.value || '';
   if (elements.otherOccurrence) elements.otherOccurrence.value = state.customOccurrence;
@@ -2932,6 +4014,7 @@ function renderPageSpecificFields() {
   renderHandwritingEntry();
   renderLocation();
   renderHistory();
+  renderSchedule();
   renderGrades();
   renderDisciplinaryPanel();
   fillSettingsForm();
@@ -2986,6 +4069,18 @@ function bindEvents() {
   if (elements.studentSearch) {
     elements.studentSearch.addEventListener('input', renderStudentChips);
   }
+
+  if (elements.scheduleAddButton) {
+    elements.scheduleAddButton.addEventListener('click', addTimetableDraftEntry);
+  }
+
+  if (elements.scheduleSaveButton) {
+    elements.scheduleSaveButton.addEventListener('click', saveTimetable);
+  }
+
+  [elements.scheduleNotificationsToggle, elements.scheduleReminderMinutes, elements.scheduleSummaryTime]
+    .filter(Boolean)
+    .forEach((control) => control.addEventListener('change', markTimetableDirty));
 
   if (elements.clearStudentButton) {
     elements.clearStudentButton.addEventListener('click', () => {
@@ -3098,10 +4193,13 @@ function bindEvents() {
 
   const historyFilterBindings = [
     [elements.historyStudentFilter, 'student', 'input'],
-    [elements.historyDateFilter, 'date', 'change'],
+    [elements.historyTermFilter, 'termKey', 'change'],
+    [elements.historyDateFrom, 'dateFrom', 'change'],
+    [elements.historyDateTo, 'dateTo', 'change'],
     [elements.historyOccurrenceFilter, 'occurrence', 'change'],
     [elements.historyClassFilter, 'classKey', 'change'],
     [elements.historyKindFilter, 'recordKind', 'change'],
+    [elements.historyStatusFilter, 'status', 'change'],
   ];
   historyFilterBindings.forEach(([element, key, eventName]) => {
     if (!element) return;
@@ -3111,9 +4209,63 @@ function bindEvents() {
       renderHistory();
     });
   });
+
+  if (elements.historySubjectType) {
+    elements.historySubjectType.addEventListener('change', () => {
+      state.historyFilters.subjectType = elements.historySubjectType.value;
+      state.historyFilters.subject = '';
+      // Um foco explícito manda mais que a seleção herdada do fluxo de registro.
+      if (state.historyFilters.subjectType) state.historyMode = 'all';
+      saveDraft();
+      renderHistory();
+      updatePageState();
+    });
+  }
+
+  if (elements.historySubjectSelect) {
+    elements.historySubjectSelect.addEventListener('change', () => {
+      state.historyFilters.subject = elements.historySubjectSelect.value;
+      saveDraft();
+      renderHistory();
+    });
+  }
+
+  if (elements.historyIncludeClass) {
+    elements.historyIncludeClass.addEventListener('change', () => {
+      state.historyFilters.includeClassWide = elements.historyIncludeClass.checked;
+      saveDraft();
+      renderHistory();
+    });
+  }
+
+  if (elements.historyIncludeDeleted) {
+    elements.historyIncludeDeleted.addEventListener('change', () => {
+      state.historyFilters.includeDeleted = elements.historyIncludeDeleted.checked;
+      saveDraft();
+      renderHistory();
+    });
+  }
+
+  if (elements.historyExportButton) {
+    elements.historyExportButton.addEventListener('click', exportHistoryReport);
+  }
+
   if (elements.historyClearFilters) {
     elements.historyClearFilters.addEventListener('click', () => {
-      state.historyFilters = { student: '', date: '', occurrence: '', classKey: '', recordKind: '' };
+      state.historyFilters = {
+        subjectType: '',
+        subject: '',
+        includeClassWide: true,
+        termKey: '',
+        dateFrom: '',
+        dateTo: '',
+        student: '',
+        occurrence: '',
+        classKey: '',
+        recordKind: '',
+        status: '',
+        includeDeleted: false,
+      };
       state.historyMode = 'all';
       saveDraft();
       renderAll();
@@ -3296,6 +4448,8 @@ async function initPage() {
   setupAutomaticSync();
   renderAll();
   updatePageState();
+  setupScheduleTicker();
+  syncTimetableToNative();
 
   if (state.page === 'occurrence') {
     await autoPrefillFinalizeContext();

@@ -49,3 +49,30 @@ Por design — `app.js` bloqueia explicitamente com alerta
 ("O momento disciplinar deve ser aplicado a alunos individuais, não à turma
 inteira.") e filtra `targetType !== 'class'` antes de salvar. Não é um bug, é
 regra de negócio.
+
+## 6. `window.Capacitor.Plugins` está vazio — use `nativePromise`
+O projeto não tem bundler e não empacota `@capacitor/core`. O `native-bridge.js`
+injetado no WebView **não** popula `Capacitor.Plugins`; quem faz isso é o
+`registerPlugin()` do core. Chamar `Capacitor.Plugins.ClassLogNative.setTimetable()`
+não lança erro visível — só devolve `undefined` e o widget nunca recebe a grade.
+A via correta aqui é `window.Capacitor.nativePromise('ClassLogNative', metodo, opcoes)`,
+encapsulada em `callNative()` no `app.js`. Ver [`android.md`](android.md).
+
+## 7. Salvar configuração quase apagou a grade horária
+`PUT /api/settings` normaliza o payload inteiro, e `normalizeSettings` semeia a
+grade padrão quando `timetable` vem `undefined`. Como `saveSettings()` (tela de
+configuração) manda só `{ schools, holidays }`, sem a guarda explícita no handler
+qualquer salvamento de cor/horário da escola ressemearia a grade por cima do que
+o usuário montou. A guarda está no handler; se alguém refatorar aquele bloco,
+tem que preservá-la.
+
+## 8. Layout de widget do Android quebra em silêncio
+View fora da lista do `RemoteViews`, view customizada (com ponto no nome) ou
+referência de tema (`?attr/...`) compilam normalmente e só falham no aparelho,
+com "não foi possível adicionar o widget". `scripts/check-widget-layout.mjs`
+(dentro de `npm test`) barra os três casos.
+
+## 9. Capacitor 7 não compila com o JDK 17
+`~/android-toolchain/jdk` é o 17 e o build morre com `invalid source release: 21`.
+O JDK 21 está em `~/android-toolchain/jdk21`, que é o padrão do
+`scripts/release-android.sh`.

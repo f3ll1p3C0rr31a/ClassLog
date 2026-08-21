@@ -9,6 +9,7 @@ const files = [
   'finalize.html',
   'history.html',
   'grades.html',
+  'schedule.html',
   'login.html',
   'settings.html',
   'privacy.html',

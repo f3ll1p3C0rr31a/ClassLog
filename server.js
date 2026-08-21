@@ -71,6 +71,61 @@ const REQUIRED_OCCURRENCES_BY_SCHOOL = {
   ec303: ['De pé, andando pela sala.', 'Ocorrência Positiva'],
 };
 
+const TIMETABLE_KINDS = ['class', 'break', 'meal', 'university', 'other'];
+const WEEKDAY_MIN = 1;
+const WEEKDAY_MAX = 7;
+
+// Grade horária padrão do Fellipe (manhã na Fátima, tarde na EC303, noite na UFN).
+// É só a semente: a partir do primeiro salvamento vale o que está no banco.
+const DEFAULT_TIMETABLE_ENTRIES = [
+  // Fátima — manhã
+  { weekday: 1, start: '07:15', end: '08:05', title: '6º Ano', kind: 'class', schoolId: 'fatima', classKey: '6ano' },
+  { weekday: 4, start: '07:15', end: '08:05', title: '6º Ano', kind: 'class', schoolId: 'fatima', classKey: '6ano' },
+  { weekday: 5, start: '07:15', end: '08:05', title: '6º Ano', kind: 'class', schoolId: 'fatima', classKey: '6ano' },
+  { weekday: 1, start: '08:05', end: '08:55', title: '7º Ano', kind: 'class', schoolId: 'fatima', classKey: '7ano' },
+  { weekday: 4, start: '08:05', end: '08:55', title: '7º Ano', kind: 'class', schoolId: 'fatima', classKey: '7ano' },
+  { weekday: 5, start: '08:05', end: '08:55', title: '7º Ano', kind: 'class', schoolId: 'fatima', classKey: '7ano' },
+  { weekday: 1, start: '08:55', end: '09:40', title: '8º Ano', kind: 'class', schoolId: 'fatima', classKey: '8ano' },
+  { weekday: 4, start: '08:55', end: '09:40', title: '8º Ano', kind: 'class', schoolId: 'fatima', classKey: '8ano' },
+  { weekday: 5, start: '08:55', end: '09:40', title: '8º Ano', kind: 'class', schoolId: 'fatima', classKey: '8ano' },
+  { weekday: 1, start: '09:40', end: '10:05', title: 'Intervalo', kind: 'break', schoolId: 'fatima' },
+  { weekday: 2, start: '09:40', end: '10:05', title: 'Intervalo', kind: 'break', schoolId: 'fatima' },
+  { weekday: 3, start: '09:40', end: '10:05', title: 'Intervalo', kind: 'break', schoolId: 'fatima' },
+  { weekday: 4, start: '09:40', end: '10:05', title: 'Intervalo', kind: 'break', schoolId: 'fatima' },
+  { weekday: 5, start: '09:40', end: '10:05', title: 'Intervalo', kind: 'break', schoolId: 'fatima' },
+  { weekday: 4, start: '10:05', end: '11:40', title: '9º Ano', kind: 'class', schoolId: 'fatima', classKey: '9ano' },
+  { weekday: 5, start: '11:40', end: '12:30', title: '9º Ano', kind: 'class', schoolId: 'fatima', classKey: '9ano' },
+  { weekday: 1, start: '12:30', end: '13:00', title: '9º Ano', kind: 'class', schoolId: 'fatima', classKey: '9ano' },
+  { weekday: 1, start: '13:00', end: '13:50', title: 'Almoço', kind: 'meal', schoolId: 'ec303' },
+  // EC303 — tarde
+  { weekday: 1, start: '13:50', end: '14:10', title: 'Rec', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 2, start: '13:50', end: '14:10', title: 'Port', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 3, start: '13:50', end: '14:10', title: 'Mat', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 4, start: '13:50', end: '14:10', title: 'Port', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 5, start: '13:50', end: '14:10', title: 'Mat', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 2, start: '14:10', end: '14:40', title: 'PDT', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 1, start: '14:50', end: '15:20', title: 'Lanche', kind: 'meal', schoolId: 'ec303' },
+  { weekday: 2, start: '14:50', end: '15:20', title: 'Lanche', kind: 'meal', schoolId: 'ec303' },
+  { weekday: 3, start: '14:50', end: '15:20', title: 'Lanche', kind: 'meal', schoolId: 'ec303' },
+  { weekday: 4, start: '14:50', end: '15:20', title: 'Lanche', kind: 'meal', schoolId: 'ec303' },
+  { weekday: 5, start: '14:50', end: '15:20', title: 'Lanche', kind: 'meal', schoolId: 'ec303' },
+  { weekday: 1, start: '16:10', end: '16:30', title: 'Intervalo', kind: 'break', schoolId: 'ec303' },
+  { weekday: 2, start: '16:10', end: '16:30', title: 'Intervalo', kind: 'break', schoolId: 'ec303' },
+  { weekday: 3, start: '16:10', end: '16:30', title: 'Intervalo', kind: 'break', schoolId: 'ec303' },
+  { weekday: 4, start: '16:10', end: '16:30', title: 'Intervalo', kind: 'break', schoolId: 'ec303' },
+  { weekday: 5, start: '16:10', end: '16:30', title: 'Intervalo', kind: 'break', schoolId: 'ec303' },
+  { weekday: 1, start: '16:30', end: '17:45', title: 'Mat', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 2, start: '16:30', end: '17:45', title: 'Cie', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 3, start: '16:30', end: '17:45', title: 'Geo', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 4, start: '16:30', end: '17:45', title: 'Hist', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  { weekday: 5, start: '16:30', end: '17:45', title: 'Art', kind: 'class', schoolId: 'ec303', classKey: '5ano-d' },
+  // UFN
+  { weekday: 4, start: '13:30', end: '15:10', title: 'Alfabetização e Letramento', kind: 'university', location: 'UFN' },
+  { weekday: 5, start: '13:30', end: '15:10', title: 'Ensino de Bioética', kind: 'university', location: 'UFN' },
+  { weekday: 4, start: '18:25', end: '20:05', title: 'Pesquisa em Ensino', kind: 'university', location: 'UFN' },
+  { weekday: 5, start: '18:25', end: '20:05', title: 'Currículo, Educação e Ensino', kind: 'university', location: 'UFN' },
+];
+
 const MENTION_VALUES = ['ND', 'EP', 'A', 'AL', 'AE'];
 const GRADE_STATUS_VALUES = ['approved', 'failed'];
 
@@ -177,6 +232,7 @@ function createDefaultSettings() {
       },
     ],
     holidays: [],
+    timetable: createDefaultTimetable(),
   };
 }
 
@@ -376,6 +432,88 @@ function countBusinessDaysInclusive(startDateOnly, endDateOnly, holidaysSet) {
   return count;
 }
 
+function normalizeTimeOfDay(value, fallback = '') {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return fallback;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return fallback;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function createDefaultTimetable() {
+  return {
+    entries: DEFAULT_TIMETABLE_ENTRIES.map((entry, index) => ({
+      id: `seed-${index + 1}`,
+      weekday: entry.weekday,
+      start: entry.start,
+      end: entry.end,
+      title: entry.title,
+      kind: entry.kind,
+      schoolId: entry.schoolId || '',
+      classKey: entry.classKey || '',
+      location: entry.location || '',
+      notes: '',
+    })),
+    notificationsEnabled: true,
+    reminderMinutes: 5,
+    dailySummaryTime: '06:30',
+  };
+}
+
+function normalizeTimetableEntry(entry) {
+  const weekday = Number(entry?.weekday);
+  const start = normalizeTimeOfDay(entry?.start);
+  const end = normalizeTimeOfDay(entry?.end);
+  const title = String(entry?.title || '').trim();
+
+  if (!Number.isInteger(weekday) || weekday < WEEKDAY_MIN || weekday > WEEKDAY_MAX) return null;
+  if (!start || !end || !title) return null;
+  // Um bloco que termina antes de começar quebraria o cálculo de "aula atual".
+  if (end <= start) return null;
+
+  const kind = TIMETABLE_KINDS.includes(entry?.kind) ? entry.kind : 'class';
+
+  return {
+    id: String(entry?.id || crypto.randomUUID()),
+    weekday,
+    start,
+    end,
+    title,
+    kind,
+    schoolId: String(entry?.schoolId || '').trim(),
+    classKey: String(entry?.classKey || '').trim(),
+    location: String(entry?.location || '').trim(),
+    notes: String(entry?.notes || '').trim(),
+  };
+}
+
+function normalizeTimetable(timetableInput) {
+  // Ausente por completo = banco antigo, antes da guia Horário existir: semeia.
+  // Presente mas vazio = o usuário apagou tudo de propósito, respeita.
+  if (!timetableInput || typeof timetableInput !== 'object') {
+    return createDefaultTimetable();
+  }
+
+  const defaults = createDefaultTimetable();
+  const entries = Array.isArray(timetableInput.entries)
+    ? timetableInput.entries.map(normalizeTimetableEntry).filter(Boolean)
+    : defaults.entries;
+
+  entries.sort((a, b) => (a.weekday - b.weekday) || a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+
+  const reminderMinutes = Number(timetableInput.reminderMinutes);
+
+  return {
+    entries,
+    notificationsEnabled: Boolean(timetableInput.notificationsEnabled ?? defaults.notificationsEnabled),
+    reminderMinutes: Number.isFinite(reminderMinutes) && reminderMinutes >= 0 && reminderMinutes <= 120
+      ? Math.round(reminderMinutes)
+      : defaults.reminderMinutes,
+    dailySummaryTime: normalizeTimeOfDay(timetableInput.dailySummaryTime, defaults.dailySummaryTime),
+  };
+}
+
 function normalizeSchool(entry, fallback) {
   const defaultSchool = fallback || {};
   const occurrenceTypes = Array.isArray(entry?.occurrenceTypes) && entry.occurrenceTypes.length > 0
@@ -423,6 +561,7 @@ function normalizeSettings(settingsInput) {
   return {
     schools: schools.length > 0 ? schools : defaults.schools,
     holidays: [...new Set(holidays)].sort(),
+    timetable: normalizeTimetable(settingsInput?.timetable),
   };
 }
 
@@ -1354,8 +1493,13 @@ async function handleApi(req, res, url) {
     }
 
     const body = await readJsonBody(req);
-    const submitted = normalizeSettings(body.settings || body);
+    const payload = body.settings || body;
+    const submitted = normalizeSettings(payload);
     const current = normalizeSettings(database.settings);
+    // Quem salva a aba de configuração não manda a grade horária junto. Sem esta
+    // guarda, normalizeSettings veria `timetable: undefined` e ressemearia a
+    // grade padrão por cima do que o usuário montou na guia Horário.
+    const timetable = payload?.timetable === undefined ? current.timetable : submitted.timetable;
     const allowed = new Set(getUserSchoolIds(user));
     database.settings = normalizeSettings({
       ...current,
@@ -1365,6 +1509,7 @@ async function handleApi(req, res, url) {
           : school
       )),
       holidays: submitted.holidays,
+      timetable,
     });
     await persistDatabase();
     sendJson(res, 200, { settings: database.settings });

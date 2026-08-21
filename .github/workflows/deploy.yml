@@ -30,6 +30,10 @@ jobs:
           node --check handwriting.js
           node --check service-worker.js
           node --check scripts/prepare-web-assets.js
+          node --check scripts/check-app-logic.js
+
+      - name: Test app logic and widget layout
+        run: npm test
 
       - name: Prepare PWA assets
         run: npm run web:prepare

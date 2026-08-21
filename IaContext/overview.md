@@ -34,7 +34,9 @@ Funções de checagem de papel em `server.js`: `canCoordinate(user)`,
 - **Offline**: IndexedDB via `offline-store.js` (filas de sincronização, sessão,
   rascunhos, fotos).
 - **Mobile**: Capacitor (`capacitor.config.json`, pasta `android/`), webDir
-  apontando para `www/` (uma cópia gerada dos arquivos da raiz).
+  apontando para `www/` (uma cópia gerada dos arquivos da raiz). Há código Java
+  nativo por cima (widget do horário, notificações, impressão em PDF) — ver
+  [`android.md`](android.md).
 
 ## Páginas (todas em `data-page="..."` no `<body>`, lidas por `app.js`)
 | Arquivo | Função |
@@ -45,6 +47,7 @@ Funções de checagem de papel em `server.js`: `canCoordinate(user)`,
 | `finalize.html` | data, localização, foto, observação, botão salvar |
 | `history.html` | histórico de ocorrências, comentários, auditoria |
 | `grades.html` | painel de menções (Bimestral/Retomada, Atv/CeV, Filosofia) |
+| `schedule.html` | grade horária: aula atual, próximos blocos, tabela da semana e editor |
 | `settings.html` | dashboard de configuração (só coordinator/admin) |
 | `privacy.html` | política de privacidade |
 
@@ -55,7 +58,11 @@ Funções de checagem de papel em `server.js`: `canCoordinate(user)`,
 4. `finalize.html`: completa dados e salva — vai para IndexedDB primeiro
    (`window.ClassLogOffline.savePendingReport`), sincroniza com `/api/reports`
    quando online.
-5. `history.html`: consulta/edita/comenta ocorrências já salvas.
+5. `history.html`: consulta/edita/comenta ocorrências já salvas. Também é a tela
+   de **relatórios**: escolher foco (aluno ou turma) + bimestre monta o recorte,
+   com resumo estatístico e exportação em PDF.
+5b. `schedule.html`: grade horária, que também alimenta o widget e as
+   notificações do app Android.
 6. `grades.html`: lança/ajusta menções bimestrais (só com permissão e online —
    ver `saveStudentGrade` em `app.js`, que bloqueia edição offline).
 

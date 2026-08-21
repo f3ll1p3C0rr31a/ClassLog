@@ -26,6 +26,28 @@ scrypt). Credenciais de teste estão no `README.md` — não duplicar aqui.
 `occurrenceTypes[]`, `policies.disciplinaryMomentEnabled`. Também guarda
 `holidays[]` (datas ISO) usadas no cálculo de dias úteis do momento disciplinar.
 
+### `settings.timetable` (grade horária)
+Objeto único na raiz de `settings`, **não** por escola:
+`entries[]` (cada bloco: `id`, `weekday` 1–7 no padrão ISO com 1 = segunda,
+`start`/`end` no formato `HH:MM`, `title`, `kind`
+(`class`/`break`/`meal`/`university`/`other`), `schoolId`, `classKey`,
+`location`, `notes`), mais `notificationsEnabled`, `reminderMinutes` e
+`dailySummaryTime`.
+
+Blocos podem se **sobrepor** de propósito (na grade real, aula da UFN das
+13h30–15h10 convive com bloco de 13h50–14h10). Por isso o modelo é uma lista
+plana, não uma matriz horário×dia; a guia Horário monta a tabela agrupando por
+faixa `start|end` distinta.
+
+A semente (`DEFAULT_TIMETABLE_ENTRIES` em `server.js`) só é aplicada quando
+`settings.timetable` está **ausente**. Se estiver presente e vazio, respeita —
+é o usuário que apagou tudo. Cuidado: `PUT /api/settings` recebe payload sem
+`timetable` quando a tela de configuração salva; há uma guarda explícita no
+handler para não ressemear por cima da grade nesse caso.
+
+Este mesmo objeto é o que alimenta o widget e as notificações do Android — ver
+[`android.md`](android.md).
+
 ### `disciplinaryActions` (momento disciplinar)
 `id`, `schoolId`, `studentFullName`, `startDate`/`endDate` (`YYYY-MM-DD`),
 `totalBusinessDays`, `status` (`'active'`/`'completed'`), `history[]` (dias

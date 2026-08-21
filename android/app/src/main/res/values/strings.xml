@@ -4,4 +4,16 @@
     <string name="title_activity_main">ClassLog</string>
     <string name="package_name">com.classlog.app</string>
     <string name="custom_url_scheme">com.classlog.app</string>
+
+    <string name="widget_name">Horário ClassLog</string>
+    <string name="widget_description">Aula atual e os próximos blocos da sua grade.</string>
+    <string name="widget_refresh">Atualizar</string>
+    <string name="widget_now">AGORA</string>
+    <string name="widget_free">SEM AULA AGORA</string>
+    <string name="widget_tomorrow">Amanhã</string>
+    <string name="widget_starts_in">começa em %1$s</string>
+    <string name="widget_nothing_ahead">Nada agendado</string>
+    <string name="widget_no_timetable_eyebrow">HORÁRIO</string>
+    <string name="widget_no_timetable_title">Grade vazia</string>
+    <string name="widget_no_timetable_meta">Abra o ClassLog para sincronizar</string>
 </resources>

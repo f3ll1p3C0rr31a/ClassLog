@@ -1417,3 +1417,374 @@ body.handwriting-open {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* ==========================================================================
+   Guia Horário
+   ========================================================================== */
+
+.schedule-hero-panel {
+  padding-top: 18px;
+}
+
+.schedule-now-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  box-shadow: 0 18px 38px rgba(23, 51, 73, 0.18);
+}
+
+.schedule-now-card[data-kind='idle'] {
+  background: linear-gradient(135deg, #5a6b7d 0%, #3d4b5a 100%);
+}
+
+.schedule-now-card[data-kind='break'],
+.schedule-now-card[data-kind='meal'] {
+  background: linear-gradient(135deg, #c8892f 0%, #a06a1d 100%);
+}
+
+.schedule-now-card[data-kind='university'] {
+  background: linear-gradient(135deg, #6b4bb0 0%, #4a3283 100%);
+}
+
+.schedule-now-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.schedule-now-title {
+  margin: 6px 0 4px;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.schedule-now-meta,
+.schedule-now-remaining {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.schedule-progress {
+  margin: 16px 0 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+}
+
+.schedule-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #fff;
+  transition: width 400ms ease;
+}
+
+.schedule-now-action {
+  margin-top: 16px;
+  background: #fff;
+  color: var(--accent-dark);
+}
+
+.schedule-upcoming {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-upcoming-row {
+  display: grid;
+  grid-template-columns: 62px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: #fff;
+  border-left: 4px solid var(--accent);
+}
+
+.schedule-upcoming-row[data-kind='break'],
+.schedule-upcoming-row[data-kind='meal'] {
+  border-left-color: #c8892f;
+}
+
+.schedule-upcoming-row[data-kind='university'] {
+  border-left-color: #6b4bb0;
+}
+
+.schedule-upcoming-row[data-kind='other'] {
+  border-left-color: var(--muted);
+}
+
+.schedule-upcoming-time {
+  display: grid;
+  gap: 2px;
+}
+
+.schedule-upcoming-time strong {
+  font-size: 1.05rem;
+}
+
+.schedule-upcoming-time small,
+.schedule-upcoming-body small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.schedule-upcoming-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.schedule-upcoming-body strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-upcoming-countdown {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+
+.schedule-table-scroller {
+  overflow-x: auto;
+  margin: 0 -6px;
+  padding: 0 6px 6px;
+}
+
+.schedule-table {
+  border-collapse: separate;
+  border-spacing: 6px;
+  width: 100%;
+  min-width: 620px;
+}
+
+.schedule-table th {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 0;
+}
+
+.schedule-table th.is-today {
+  color: var(--accent-dark);
+}
+
+.schedule-table td {
+  vertical-align: top;
+  min-width: 108px;
+}
+
+.schedule-table td.is-today {
+  background: rgba(14, 106, 92, 0.06);
+  border-radius: 12px;
+}
+
+.schedule-time-cell {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  padding-right: 8px !important;
+  white-space: nowrap;
+}
+
+.schedule-time-cell small {
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.schedule-cell {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(14, 106, 92, 0.1);
+  border: 1px solid rgba(14, 106, 92, 0.2);
+  font-size: 0.88rem;
+}
+
+.schedule-cell small {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.schedule-cell[data-kind='break'],
+.schedule-cell[data-kind='meal'] {
+  background: rgba(200, 137, 47, 0.12);
+  border-color: rgba(200, 137, 47, 0.28);
+}
+
+.schedule-cell[data-kind='university'] {
+  background: rgba(107, 75, 176, 0.12);
+  border-color: rgba(107, 75, 176, 0.28);
+}
+
+.schedule-cell[data-kind='other'] {
+  background: rgba(102, 118, 138, 0.12);
+  border-color: rgba(102, 118, 138, 0.26);
+}
+
+.schedule-cell.is-now {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(14, 106, 92, 0.28);
+}
+
+.schedule-cell.is-now small {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.schedule-editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.schedule-edit-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.schedule-edit-row .field {
+  margin-top: 0;
+}
+
+.schedule-edit-row .field span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.schedule-edit-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.toggle-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-field input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.toggle-field span {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+/* ==========================================================================
+   Resumo de relatórios do histórico
+   ========================================================================== */
+
+.report-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.report-tiles article {
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.report-tiles span {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--accent-dark);
+  line-height: 1;
+}
+
+.report-tiles small {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.report-ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.report-ranking {
+  margin-top: 18px;
+}
+
+.report-ranking h3 {
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+}
+
+.report-ranking-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(60px, 2fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 0.88rem;
+}
+
+.report-ranking-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(14, 106, 92, 0.12);
+  overflow: hidden;
+}
+
+.report-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .schedule-now-title {
+    font-size: 1.6rem;
+  }
+
+  .schedule-upcoming-row {
+    grid-template-columns: 54px 1fr;
+  }
+
+  .schedule-upcoming-countdown {
+    grid-column: 2;
+    text-align: right;
+  }
+}
