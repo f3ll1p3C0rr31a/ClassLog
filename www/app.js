@@ -174,9 +174,10 @@ const schoolClassGroups = {
 
 const storageKeys = {
   locationPrefill: 'classlog-location-prefill-v1',
+  schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.0';
+const appVersion = '1.4.1';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -205,10 +206,53 @@ const activityOccurrenceTypes = ['Não fez atividade', 'Não copiou'];
 const positiveOccurrenceTypes = ['Ocorrência Positiva'];
 const nonBehaviorOccurrenceTypes = [...activityOccurrenceTypes, ...positiveOccurrenceTypes];
 
+/**
+ * Escola escolhida à mão.
+ *
+ * Mora em sessionStorage, e não no rascunho, por dois motivos. O rascunho é
+ * gravado por escola (getOfflineScope inclui o schoolId), então a flag salva no
+ * escopo da Fátima ficava invisível assim que a detecção automática trocava
+ * para a EC303 — era esse o bug de não conseguir registrar de tarde uma
+ * ocorrência da manhã. E a escolha vale para a sessão inteira, não para uma
+ * ocorrência: quem troca de escola quer continuar lá até fechar o app.
+ *
+ * sessionStorage dá exatamente essa validade: sobrevive à navegação entre
+ * páginas e morre quando o app fecha.
+ */
+function readSchoolOverride() {
+  try {
+    return sessionStorage.getItem(storageKeys.schoolOverride) || '';
+  } catch {
+    // Modo privado ou storage bloqueado: cai para a detecção automática.
+    return '';
+  }
+}
+
+function writeSchoolOverride(schoolId) {
+  try {
+    sessionStorage.setItem(storageKeys.schoolOverride, schoolId);
+  } catch {
+    // Sem persistência a troca ainda vale para esta página.
+  }
+}
+
+function clearSchoolOverride() {
+  try {
+    sessionStorage.removeItem(storageKeys.schoolOverride);
+  } catch {
+    // Nada a fazer.
+  }
+}
+
+const initialSchoolOverride = readSchoolOverride();
+
 const state = {
   page: document.body.dataset.page || 'students',
-  selectedSchoolId: 'fatima',
-  manualSchoolSelection: false,
+  // Semeado de forma síncrona, antes de qualquer await: getOfflineScope() é
+  // chamado com este valor e precisa apontar para o escopo certo já na
+  // primeira leitura do rascunho.
+  selectedSchoolId: initialSchoolOverride || 'fatima',
+  manualSchoolSelection: Boolean(initialSchoolOverride),
   settings: { schools: [], holidays: [] },
   selectedClass: '',
   selectedStudents: [],
@@ -656,6 +700,13 @@ async function apiRequest(pathname, options = {}) {
   return body;
 }
 
+// Toda troca *automática* de escola passa por aqui. A escolha manual vence
+// qualquer detecção — inclusive a que vem da sessão offline guardada.
+function applyDetectedSchool(schoolId) {
+  if (!schoolId || state.manualSchoolSelection) return;
+  state.selectedSchoolId = schoolId;
+}
+
 function getOfflineScope(schoolId = state.selectedSchoolId) {
   return window.ClassLogOffline.makeScope(state.authUser?.username, schoolId);
 }
@@ -676,7 +727,7 @@ async function loadAuthUser() {
   if (!navigator.onLine) {
     if (isOfflineSessionValid(localSession)) {
       state.authUser = localSession.user;
-      state.selectedSchoolId = localSession.activeSchoolId;
+      applyDetectedSchool(localSession.activeSchoolId);
       state.isOfflineSession = true;
       return localSession.user;
     }
@@ -695,7 +746,7 @@ async function loadAuthUser() {
 
   if (isOfflineSessionValid(localSession)) {
     state.authUser = localSession.user;
-    state.selectedSchoolId = localSession.activeSchoolId;
+    applyDetectedSchool(localSession.activeSchoolId);
     state.isOfflineSession = true;
     return localSession.user;
   }
@@ -710,7 +761,7 @@ async function loadContext() {
     const cached = await window.ClassLogOffline.getContext(getOfflineScope());
     if (!cached?.settings) throw new Error('offline_context_unavailable');
     state.settings = cached.settings;
-    state.selectedSchoolId = cached.activeSchoolId || state.selectedSchoolId;
+    applyDetectedSchool(cached.activeSchoolId);
     rebuildSchoolDependentState();
     return;
   }
@@ -718,9 +769,7 @@ async function loadContext() {
   try {
     const response = await apiRequest('/api/context', { method: 'GET', timeoutMs: 4000 });
     state.settings = response.settings || { schools: [], holidays: [] };
-    if (!state.manualSchoolSelection) {
-      state.selectedSchoolId = response.activeSchoolId || state.selectedSchoolId;
-    }
+    applyDetectedSchool(response.activeSchoolId);
     state.isOfflineSession = false;
     const scope = getOfflineScope();
     await window.ClassLogOffline.saveContext(scope, {
@@ -738,7 +787,7 @@ async function loadContext() {
   } catch (error) {
     const session = await window.ClassLogOffline.getSession();
     if (!isOfflineSessionValid(session)) throw error;
-    state.selectedSchoolId = session.activeSchoolId;
+    applyDetectedSchool(session.activeSchoolId);
     const cached = await window.ClassLogOffline.getContext(getOfflineScope());
     if (!cached?.settings) throw error;
     state.settings = cached.settings;
@@ -790,6 +839,10 @@ async function migrateLegacyDraft() {
 async function primeOfflineAccess(loginUser, mobileToken = '') {
   state.authUser = loginUser;
   state.mobileToken = mobileToken;
+  // Login novo começa do zero: a escola escolhida à mão na sessão anterior não
+  // deve atravessar a troca de usuário.
+  clearSchoolOverride();
+  state.manualSchoolSelection = false;
   const context = await apiRequest('/api/context', { method: 'GET' });
   state.settings = context.settings || { schools: [], holidays: [] };
   state.selectedSchoolId = context.activeSchoolId || loginUser.schoolIds?.[0] || 'fatima';
@@ -829,7 +882,9 @@ async function loadDraft() {
     const draft = await window.ClassLogOffline.getDraft(getOfflineScope());
     if (!draft) return;
     state.selectedSchoolId = draft.selectedSchoolId || state.selectedSchoolId;
-    state.manualSchoolSelection = Boolean(draft.manualSchoolSelection);
+    // manualSchoolSelection de propósito não sai daqui: o rascunho é gravado
+    // por escola, então essa flag só era legível a partir do escopo em que foi
+    // salva. Quem manda é o override de sessão (readSchoolOverride).
     state.selectedClass = draft.selectedClass || state.selectedClass;
     state.selectedStudents = Array.isArray(draft.selectedStudents) ? draft.selectedStudents : [];
     state.selectedOccurrences = Array.isArray(draft.selectedOccurrences)
@@ -884,7 +939,6 @@ async function saveDraft() {
   try {
     await window.ClassLogOffline.saveDraft(getOfflineScope(), {
       selectedSchoolId: state.selectedSchoolId,
-      manualSchoolSelection: state.manualSchoolSelection,
       selectedStudents: state.selectedStudents,
       selectedClass: state.selectedClass,
       selectedOccurrences: state.selectedOccurrences,
@@ -913,7 +967,9 @@ async function clearDraft() {
   if (state.authUser && state.selectedSchoolId) {
     await window.ClassLogOffline.clearDraft(getOfflineScope());
   }
-  state.manualSchoolSelection = false;
+  // Salvar uma ocorrência limpa o rascunho, não a escola escolhida à mão:
+  // quem registra um caso da manhã costuma registrar o próximo em seguida.
+  state.manualSchoolSelection = Boolean(readSchoolOverride());
   state.selectedStudents = [];
   state.selectedOccurrences = [];
   state.recordKind = 'occurrence';
@@ -3632,6 +3688,7 @@ function openTimetableClass(entry) {
   if (entry.schoolId && entry.schoolId !== state.selectedSchoolId) {
     state.selectedSchoolId = entry.schoolId;
     state.manualSchoolSelection = true;
+    writeSchoolOverride(entry.schoolId);
     rebuildSchoolDependentState();
   }
   state.selectedClass = entry.classKey;
@@ -4049,6 +4106,11 @@ async function onSchoolChange(nextSchoolId, manual = true) {
 
   state.selectedSchoolId = nextSchoolId;
   state.manualSchoolSelection = manual;
+  if (manual) {
+    writeSchoolOverride(nextSchoolId);
+  } else {
+    clearSchoolOverride();
+  }
   state.selectedStudents = [];
   state.customOccurrence = '';
 
@@ -4274,6 +4336,7 @@ function bindEvents() {
 
   if (elements.logoutButton) {
     elements.logoutButton.addEventListener('click', async () => {
+      clearSchoolOverride();
       await window.ClassLogOffline.lockSession();
       try {
         await apiRequest('/api/auth/logout', { method: 'POST', timeoutMs: 3000 });

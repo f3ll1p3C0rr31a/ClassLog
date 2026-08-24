@@ -97,3 +97,30 @@ E é de propósito: a única versão de Node que importa é a da imagem que vai 
 produção. Por isso o passo de validação do workflow roda dentro de um
 `docker run --rm node:22-alpine`. Adicionar `run: npm ...` direto no workflow
 falha com `command not found`.
+
+## 13. O rascunho é gravado **por escola** — não guarde nele nada de sessão
+`getOfflineScope()` monta a chave como `username::schoolId`, então cada escola
+tem o seu próprio rascunho no IndexedDB. Some-se a isso a ordem do `initPage()`:
+
+```
+loadAuthUser() → loadContext() → loadDraft()
+                      ↑ já troca a escola      ↑ só agora lê o rascunho
+```
+
+`loadContext()` aplica a escola detectada pelo horário **antes** de o rascunho
+ser lido. Se algo que vale para a sessão inteira for guardado no rascunho, ele
+fica salvo no escopo da escola A e, na página seguinte, o app procura no escopo
+da escola B — e nunca mais encontra.
+
+Foi exatamente isso com `manualSchoolSelection`: trocar para a Fátima à tarde e
+avançar de `index.html` para `occurrence.html` voltava sozinho para a EC303,
+tornando impossível registrar de tarde uma ocorrência da manhã. A flag existia e
+estava correta; só era invisível a partir do escopo errado.
+
+A correção foi tirar esse fato do rascunho e pôr num **override de sessão**
+(`sessionStorage`, `classlog-school-override-v1`), lido de forma **síncrona**
+antes de qualquer `await`, ao montar o objeto `state`. Toda troca automática
+passa por `applyDetectedSchool()`, que respeita o override.
+
+Regra prática: rascunho é para o que pertence à ocorrência sendo montada.
+O que vale para a sessão (qual escola estou vendo) vai no override.

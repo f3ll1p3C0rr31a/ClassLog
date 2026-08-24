@@ -1,6 +1,6 @@
 {
   "name": "classlog",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "commonjs",
   "scripts": {
@@ -13,7 +13,7 @@
     "mobile:build:android": "npm run mobile:sync && cd android && ./gradlew assembleRelease",
     "mobile:check": "node scripts/check-widget-layout.mjs",
     "android:release": "bash scripts/release-android.sh",
-    "test": "node scripts/check-app-logic.js && node scripts/check-widget-layout.mjs"
+    "test": "node scripts/check-app-logic.js && node scripts/check-school-selection.js && node scripts/check-widget-layout.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.2",

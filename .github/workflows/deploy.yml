@@ -61,6 +61,7 @@ jobs:
               node --check service-worker.js
               node --check scripts/prepare-web-assets.js
               node --check scripts/check-app-logic.js
+              node --check scripts/check-school-selection.js
               npm test
               npm run web:prepare
             '

@@ -76,6 +76,13 @@ const mentionOrder = ['ND', 'EP', 'A', 'AL', 'AE'];
 ```
 `ND` e `EP` = reprovado (`automaticStatus = 'failed'`); `A`/`AL`/`AE` = aprovado.
 
+## Estado de sessão fora do IndexedDB
+`sessionStorage['classlog-school-override-v1']` guarda a escola escolhida à mão.
+Fica **fora** do rascunho de propósito — o rascunho é por escola e não seria
+legível depois de uma troca automática. Ver [`gotchas.md`](gotchas.md) item 13.
+Validade: sobrevive à navegação entre páginas, morre quando o app fecha, e é
+limpo no logout e no login de outro usuário.
+
 ## Offline (IndexedDB, `classlog-offline` v2 — `offline-store.js`)
 Object stores: `sessions`, `contexts`, `drafts`, `reports`, `queue` (fila de
 envio pendente, indexada por `clientRequestId`), `photos`. O service worker
