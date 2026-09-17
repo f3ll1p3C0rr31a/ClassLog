@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.1';
+const appVersion = '1.4.2';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;

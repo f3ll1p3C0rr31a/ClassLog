@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.1';
+const appVersion = '1.4.2';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -254,6 +254,7 @@ const state = {
   selectedSchoolId: initialSchoolOverride || 'fatima',
   manualSchoolSelection: Boolean(initialSchoolOverride),
   settings: { schools: [], holidays: [] },
+  studentNamesDraft: null,
   selectedClass: '',
   selectedStudents: [],
   selectedOccurrences: [],
@@ -463,6 +464,9 @@ const elements = {
   settingsOccurrenceList: $('settingsOccurrenceList'),
   settingsHolidays: $('settingsHolidays'),
   settingsDisciplinaryToggle: $('settingsDisciplinaryToggle'),
+  settingsStudentClass: $('settingsStudentClass'),
+  settingsStudentSearch: $('settingsStudentSearch'),
+  settingsStudentNames: $('settingsStudentNames'),
   settingsSaveButton: $('settingsSaveButton'),
   settingsHint: $('settingsHint'),
   syncStatus: $('syncStatus'),
@@ -587,7 +591,13 @@ function getOccurrenceTypes() {
   return Array.isArray(school?.occurrenceTypes) && school.occurrenceTypes.length > 0 ? school.occurrenceTypes : ['Outra'];
 }
 
-function buildStudentRoster(groups) {
+function getStudentNameOverrides(schoolId) {
+  const school = getSchools().find((entry) => entry.id === schoolId);
+  return school?.studentNames && typeof school.studentNames === 'object' ? school.studentNames : {};
+}
+
+function buildStudentRoster(groups, schoolId = state.selectedSchoolId) {
+  const overrides = getStudentNameOverrides(schoolId);
   const names = groups.flatMap((group) => group.students);
   const firstNameCounts = names.reduce((counts, fullName) => {
     const firstName = normalizeKey(fullName.split(/\s+/)[0]);
@@ -597,8 +607,10 @@ function buildStudentRoster(groups) {
 
   return groups.flatMap((group) => {
     const classTarget = {
-      fullName: `__CLASS__:${state.selectedSchoolId}:${group.key}`,
+      fullName: `__CLASS__:${schoolId}:${group.key}`,
       displayName: group.label,
+      defaultDisplayName: group.label,
+      nicknames: [],
       firstName: group.label,
       classKey: group.key,
       classLabel: group.label,
@@ -609,11 +621,14 @@ function buildStudentRoster(groups) {
     const parts = fullName.split(/\s+/);
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
-    const displayName = firstNameCounts[normalizeKey(firstName)] > 1 ? `${firstName} ${lastName}` : firstName;
+    const defaultDisplayName = titleCase(firstNameCounts[normalizeKey(firstName)] > 1 ? `${firstName} ${lastName}` : firstName);
+    const override = overrides[fullName] || {};
 
     return {
       fullName,
-      displayName: titleCase(displayName),
+      displayName: override.displayName || defaultDisplayName,
+      defaultDisplayName,
+      nicknames: Array.isArray(override.nicknames) ? override.nicknames : [],
       firstName: titleCase(firstName),
       classKey: group.key,
       classLabel: group.label,
@@ -631,6 +646,19 @@ function getStudentRoster() {
 
 function getStudentMap() {
   return new Map(getStudentRoster().map((student) => [student.fullName, student]));
+}
+
+// Nome para a tela: o de exibição atual (configurável), caindo no que foi
+// gravado no registro quando o aluno não está na turma carregada.
+function getStudentScreenLabel(student, studentMap = getStudentMap()) {
+  if (student?.targetType === 'class') return student.displayName;
+  return studentMap.get(student?.fullName)?.displayName || student?.displayName || '';
+}
+
+// Nome para documentos que saem do app (PDF para os pais): sempre o oficial completo.
+function getStudentOfficialLabel(student) {
+  if (student?.targetType === 'class') return `${student.displayName} (turma)`;
+  return titleCase(student?.fullName) || student?.displayName || '';
 }
 
 function normalizeDraftSchoolSelection(nextSchoolId) {
@@ -1298,6 +1326,7 @@ function renderStudentChips() {
       normalizeKey(student.displayName).includes(query)
       || normalizeKey(student.fullName).includes(query)
       || normalizeKey(student.firstName).includes(query)
+      || student.nicknames.some((nickname) => normalizeKey(nickname).includes(query))
     );
   });
 
@@ -1321,7 +1350,7 @@ function renderStudentChips() {
     const daysSuffix = disciplinary ? ` (${disciplinary.remainingBusinessDays}d)` : '';
     button.textContent = student.targetType === 'class'
       ? `Selecionar turma inteira: ${student.displayName}`
-      : `${student.displayName}${daysSuffix}`;
+      : `${student.displayName}${student.nicknames.length ? ` (${student.nicknames.join(', ')})` : ''}${daysSuffix}`;
     if (student.targetType === 'class') button.classList.add('class-target');
     if (disciplinary) {
       button.classList.add('disciplinary-alert');
@@ -2026,9 +2055,10 @@ function renderHandwritingEntry() {
    sempre do mesmo conjunto filtrado, para o papel bater com a tela.
    ========================================================================== */
 
-function getHistoryFocusLabel() {
+function getHistoryFocusLabel({ official = false } = {}) {
   const filters = state.historyFilters;
   if (filters.subjectType === 'student' && filters.subject) {
+    if (official) return titleCase(filters.subject);
     return getStudentMap().get(filters.subject)?.displayName || filters.subject;
   }
   if (filters.subjectType === 'class' && filters.subject) {
@@ -2118,8 +2148,11 @@ function getFilteredReports() {
 
   if (filters.student) {
     const query = normalizeKey(filters.student);
+    const studentMap = getStudentMap();
     filtered = filtered.filter((report) => (report.selectedStudents || []).some((student) => (
-      normalizeKey(student.displayName).includes(query) || normalizeKey(student.fullName).includes(query)
+      normalizeKey(student.displayName).includes(query)
+      || normalizeKey(student.fullName).includes(query)
+      || normalizeKey(getStudentScreenLabel(student, studentMap)).includes(query)
     )));
   }
   if (filters.occurrence) {
@@ -2141,7 +2174,8 @@ function getFilteredReports() {
   return filtered.sort((a, b) => new Date(b.occurredAt || b.createdAt) - new Date(a.occurredAt || a.createdAt));
 }
 
-function summarizeReports(reports) {
+function summarizeReports(reports, { official = false } = {}) {
+  const studentMap = official ? null : getStudentMap();
   const byType = new Map();
   const byStudent = new Map();
   const byMonth = new Map();
@@ -2163,7 +2197,7 @@ function summarizeReports(reports) {
     });
 
     (report.selectedStudents || []).forEach((student) => {
-      const key = student.displayName || student.fullName;
+      const key = official ? getStudentOfficialLabel(student) : getStudentScreenLabel(student, studentMap) || student.fullName;
       byStudent.set(key, (byStudent.get(key) || 0) + 1);
     });
 
@@ -2331,16 +2365,17 @@ function escapeHtml(value) {
 }
 
 function buildHistoryReportDocument(reports) {
-  const summary = summarizeReports(reports);
+  // Este documento vai para os pais: nomes sempre oficiais, nunca apelidos.
+  const summary = summarizeReports(reports, { official: true });
   const school = getActiveSchool();
-  const focus = getHistoryFocusLabel();
+  const focus = getHistoryFocusLabel({ official: true });
   const period = describeHistoryPeriod();
   const generatedAt = new Date().toLocaleString('pt-BR');
   const primary = school?.palette?.primary || '#0f4ea8';
 
   const rows = reports.map((report) => {
     const students = (report.selectedStudents || [])
-      .map((student) => (student.targetType === 'class' ? `${student.displayName} (turma)` : student.displayName))
+      .map(getStudentOfficialLabel)
       .join(', ');
     const when = new Date(report.occurredAt || report.createdAt);
     const comments = (report.comments || []).map((comment) => `${comment.createdByName || 'Sistema'}: ${comment.text}`).join(' | ');
@@ -2431,7 +2466,7 @@ function buildHistoryReportDocument(reports) {
 async function exportHistoryReport() {
   const reports = getFilteredReports();
   const html = buildHistoryReportDocument(reports);
-  const fileName = `ClassLog - ${getHistoryFocusLabel()} - ${describeHistoryPeriod()}`.replace(/[\\/:*?"<>|]/g, '-');
+  const fileName = `ClassLog - ${getHistoryFocusLabel({ official: true })} - ${describeHistoryPeriod()}`.replace(/[\\/:*?"<>|]/g, '-');
 
   if (isNativeApp()) {
     try {
@@ -2537,6 +2572,7 @@ function renderHistory() {
     return;
   }
 
+  const studentMap = getStudentMap();
   filteredReports.forEach((report) => {
     const card = elements.recordTemplate.content.cloneNode(true);
     const cardRoot = card.firstElementChild;
@@ -2557,7 +2593,7 @@ function renderHistory() {
     report.selectedStudents.forEach((student) => {
       const tag = document.createElement('span');
       tag.className = 'record-student-tag';
-      tag.textContent = student.displayName;
+      tag.textContent = getStudentScreenLabel(student, studentMap);
       studentsWrap.appendChild(tag);
     });
 
@@ -2675,7 +2711,7 @@ function renderReportModal() {
   report.selectedStudents.forEach((student) => {
     const tag = document.createElement('span');
     tag.className = 'selected-pill';
-    tag.textContent = student.displayName;
+    tag.textContent = getStudentScreenLabel(student);
     elements.recordModalSummary.appendChild(tag);
   });
 
@@ -3348,6 +3384,94 @@ function fillSettingsForm() {
   if (elements.settingsOccurrenceList) elements.settingsOccurrenceList.value = (school.occurrenceTypes || []).join('\n');
   if (elements.settingsDisciplinaryToggle) elements.settingsDisciplinaryToggle.checked = Boolean(school.policies?.disciplinaryMomentEnabled);
   if (elements.settingsHolidays) elements.settingsHolidays.value = (state.settings.holidays || []).join('\n');
+
+  // renderAll() chama esta função várias vezes; só recomeça o rascunho dos nomes
+  // quando troca a escola, para não perder o que foi digitado e ainda não salvo.
+  if (state.studentNamesDraft?.schoolId !== school.id) {
+    state.studentNamesDraft = { schoolId: school.id, names: JSON.parse(JSON.stringify(school.studentNames || {})) };
+    renderSettingsStudentClassSelect(school.id);
+  }
+  renderSettingsStudentNames();
+}
+
+function renderSettingsStudentClassSelect(schoolId) {
+  if (!elements.settingsStudentClass) return;
+  const groups = getClassGroupsForSchool(schoolId);
+  const previous = elements.settingsStudentClass.value;
+  elements.settingsStudentClass.innerHTML = '';
+  groups.forEach((group) => {
+    const option = document.createElement('option');
+    option.value = group.key;
+    option.textContent = group.label;
+    elements.settingsStudentClass.appendChild(option);
+  });
+  elements.settingsStudentClass.value = groups.some((group) => group.key === previous) ? previous : groups[0]?.key || '';
+}
+
+function renderSettingsStudentNames() {
+  if (!elements.settingsStudentNames || !state.studentNamesDraft) return;
+
+  const { schoolId, names } = state.studentNamesDraft;
+  const classKey = elements.settingsStudentClass?.value || '';
+  const query = normalizeKey((elements.settingsStudentSearch?.value || '').trim());
+  const students = buildStudentRoster(getClassGroupsForSchool(schoolId), schoolId).filter((student) => {
+    if (student.targetType !== 'student' || student.classKey !== classKey) return false;
+    if (!query) return true;
+    const entry = names[student.fullName] || {};
+    return [student.fullName, entry.displayName, ...(entry.nicknames || [])].some((value) => normalizeKey(value).includes(query));
+  });
+
+  elements.settingsStudentNames.innerHTML = '';
+  if (students.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'Nenhum aluno encontrado.';
+    elements.settingsStudentNames.appendChild(empty);
+    return;
+  }
+
+  const updateEntry = (fullName, patch) => {
+    const next = { displayName: '', nicknames: [], ...names[fullName], ...patch };
+    if (next.displayName || next.nicknames.length > 0) names[fullName] = next;
+    else delete names[fullName];
+  };
+
+  students.forEach((student) => {
+    const entry = names[student.fullName] || {};
+    const row = document.createElement('div');
+    row.className = 'student-name-row';
+
+    const official = document.createElement('strong');
+    official.textContent = titleCase(student.fullName);
+
+    const displayField = document.createElement('label');
+    displayField.className = 'field';
+    const displayLabel = document.createElement('span');
+    displayLabel.textContent = 'Nome na lista';
+    const displayInput = document.createElement('input');
+    displayInput.type = 'text';
+    displayInput.maxLength = 60;
+    displayInput.placeholder = student.defaultDisplayName;
+    displayInput.value = entry.displayName || '';
+    displayInput.addEventListener('input', () => updateEntry(student.fullName, { displayName: displayInput.value.trim() }));
+    displayField.append(displayLabel, displayInput);
+
+    const nicknameField = document.createElement('label');
+    nicknameField.className = 'field';
+    const nicknameLabel = document.createElement('span');
+    nicknameLabel.textContent = 'Apelidos (separados por vírgula)';
+    const nicknameInput = document.createElement('input');
+    nicknameInput.type = 'text';
+    nicknameInput.placeholder = 'Ex.: Tuca, Juju';
+    nicknameInput.value = (entry.nicknames || []).join(', ');
+    nicknameInput.addEventListener('input', () => updateEntry(student.fullName, {
+      nicknames: [...new Set(nicknameInput.value.split(',').map((value) => value.trim()).filter(Boolean))],
+    }));
+    nicknameField.append(nicknameLabel, nicknameInput);
+
+    row.append(official, displayField, nicknameField);
+    elements.settingsStudentNames.appendChild(row);
+  });
 }
 
 async function saveSettings() {
@@ -3381,6 +3505,7 @@ async function saveSettings() {
         ...school.policies,
         disciplinaryMomentEnabled: Boolean(elements.settingsDisciplinaryToggle?.checked),
       },
+      studentNames: state.studentNamesDraft?.schoolId === schoolId ? state.studentNamesDraft.names : school.studentNames || {},
     };
   });
 
@@ -3399,6 +3524,7 @@ async function saveSettings() {
 
     await loadContext();
     await loadDisciplinaryActions();
+    state.studentNamesDraft = null;
     renderAll();
 
     if (elements.settingsHint) elements.settingsHint.textContent = 'Configuracoes salvas com sucesso.';
@@ -4423,6 +4549,14 @@ function bindEvents() {
 
   if (elements.settingsSchoolSelect) {
     elements.settingsSchoolSelect.addEventListener('change', fillSettingsForm);
+  }
+
+  if (elements.settingsStudentClass) {
+    elements.settingsStudentClass.addEventListener('change', renderSettingsStudentNames);
+  }
+
+  if (elements.settingsStudentSearch) {
+    elements.settingsStudentSearch.addEventListener('input', renderSettingsStudentNames);
   }
 
   if (elements.settingsSaveButton) {

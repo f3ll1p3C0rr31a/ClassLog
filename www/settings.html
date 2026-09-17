@@ -19,7 +19,7 @@
           <p class="hero-copy" id="pageDescription">Ajuste horários, cores, ocorrências e feriados por escola.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.4.1 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.4.2 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -89,6 +89,22 @@
           <span>Ocorrências (uma por linha)</span>
           <textarea id="settingsOccurrenceList" rows="8" placeholder="Agressão física"></textarea>
         </label>
+
+        <section class="student-names-settings">
+          <h3>Nomes dos alunos</h3>
+          <p class="hint">O nome de exibição e os apelidos aparecem só na lista de seleção, para facilitar a identificação. Relatórios e PDFs saem sempre com o nome oficial completo.</p>
+          <div class="grid-two compact-grid">
+            <label class="field">
+              <span>Turma</span>
+              <select id="settingsStudentClass"></select>
+            </label>
+            <label class="field">
+              <span>Buscar aluno</span>
+              <input id="settingsStudentSearch" type="search" placeholder="Nome ou apelido" />
+            </label>
+          </div>
+          <div class="student-names-list" id="settingsStudentNames"></div>
+        </section>
 
         <label class="field checkbox-row">
           <input id="settingsDisciplinaryToggle" type="checkbox" />
