@@ -19,7 +19,7 @@
           <p class="hero-copy" id="pageDescription">Ajuste horários, cores, ocorrências e feriados por escola.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.4.2 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.4.3 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -91,8 +91,8 @@
         </label>
 
         <section class="student-names-settings">
-          <h3>Nomes dos alunos</h3>
-          <p class="hint">O nome de exibição e os apelidos aparecem só na lista de seleção, para facilitar a identificação. Relatórios e PDFs saem sempre com o nome oficial completo.</p>
+          <h3>Alunos das turmas</h3>
+          <p class="hint">O nome de exibição e os apelidos aparecem só na lista de seleção, para facilitar a identificação. Relatórios e PDFs saem sempre com o nome oficial completo. Aluno transferido some da seleção e das menções, mas continua no histórico.</p>
           <div class="grid-two compact-grid">
             <label class="field">
               <span>Turma</span>
@@ -102,6 +102,13 @@
               <span>Buscar aluno</span>
               <input id="settingsStudentSearch" type="search" placeholder="Nome ou apelido" />
             </label>
+          </div>
+          <div class="student-add-row">
+            <label class="field">
+              <span>Novo aluno nesta turma (nome oficial completo)</span>
+              <input id="settingsNewStudentName" type="text" maxlength="120" autocomplete="off" placeholder="Ex.: Maria Eduarda da Silva" />
+            </label>
+            <button class="ghost-button" type="button" id="settingsAddStudentButton">Adicionar aluno</button>
           </div>
           <div class="student-names-list" id="settingsStudentNames"></div>
         </section>

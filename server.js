@@ -545,11 +545,14 @@ function normalizeSchool(entry, fallback) {
       disciplinaryMomentEnabled: Boolean(entry?.policies?.disciplinaryMomentEnabled ?? defaultSchool?.policies?.disciplinaryMomentEnabled),
     },
     studentNames: normalizeStudentNames(entry?.studentNames),
+    addedStudents: normalizeAddedStudents(entry?.addedStudents),
   };
 }
 
-// Nome de exibição e apelidos por aluno, chaveados pelo nome oficial. Só valem
-// na lista de seleção; relatórios continuam saindo com o nome oficial completo.
+// Nome de exibição, apelidos e transferência por aluno, chaveados pelo nome
+// oficial. Exibição e apelidos só valem na lista de seleção; relatórios
+// continuam saindo com o nome oficial completo. Transferido some das listas,
+// mas continua existindo para o histórico.
 function normalizeStudentNames(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {};
@@ -565,8 +568,9 @@ function normalizeStudentNames(input) {
         .map((nickname) => String(nickname || '').trim().slice(0, 40))
         .filter(Boolean),
     )].slice(0, 10);
-    if (displayName || nicknames.length > 0) {
-      result[fullName] = { displayName, nicknames };
+    const transferredAt = /^\d{4}-\d{2}-\d{2}$/.test(String(value?.transferredAt || '')) ? value.transferredAt : '';
+    if (displayName || nicknames.length > 0 || transferredAt) {
+      result[fullName] = { displayName, nicknames, transferredAt };
     }
   }
   return result;
@@ -593,6 +597,29 @@ function normalizeSettings(settingsInput) {
     holidays: [...new Set(holidays)].sort(),
     timetable: normalizeTimetable(settingsInput?.timetable),
   };
+}
+
+// Alunos que chegaram depois da lista fixa do app.js. Nome oficial em
+// maiúsculas, como a lista original, para não duplicar por diferença de caixa.
+function normalizeAddedStudents(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const seen = new Set();
+  return input
+    .map((student) => ({
+      fullName: String(student?.fullName || '').trim().replace(/\s+/g, ' ').toUpperCase().slice(0, 120),
+      classKey: String(student?.classKey || '').trim(),
+      addedAt: /^\d{4}-\d{2}-\d{2}$/.test(String(student?.addedAt || '')) ? student.addedAt : '',
+    }))
+    .filter((student) => {
+      const key = `${student.classKey}|${student.fullName}`;
+      if (!student.fullName || !student.classKey || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 500);
 }
 
 function normalizeDisciplinaryActions(actions) {

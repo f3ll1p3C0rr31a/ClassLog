@@ -180,3 +180,19 @@ check('resumo do PDF usa nome oficial', run(`summarizeReports(getFilteredReports
 const namedHtml = run('buildHistoryReportDocument(getFilteredReports())');
 check('PDF traz o nome oficial', namedHtml.includes('Arthur Carvalho Thoele'), true);
 check('PDF não traz exibição nem apelido', /Tuca|Arthurzinho/.test(namedHtml), false);
+
+console.log('--- transferidos e alunos novos ---');
+run(`state.settings.schools = [{ id: 'fatima', name: 'Fátima',
+  studentNames: { 'ARTHUR CARVALHO THOELE': { displayName: '', nicknames: [], transferredAt: '2026-09-17' } },
+  addedStudents: [{ fullName: 'ANA NOVA DA SILVA', classKey: '6ano', addedAt: '2026-09-17' }] }];
+  state.selectedClass = '6ano';
+  state.selectedStudents = ['ARTHUR CARVALHO THOELE', 'ANA NOVA DA SILVA'];`);
+const sixth = "getCurrentClassGroups().find((group) => group.key === '6ano')";
+check('transferido sai dos ativos', run(`${sixth}.students.includes('ARTHUR CARVALHO THOELE')`), false);
+check('transferido continua em allStudents', run(`${sixth}.allStudents.includes('ARTHUR CARVALHO THOELE')`), true);
+check('aluno novo entra na turma', run(`${sixth}.students.includes('ANA NOVA DA SILVA')`), true);
+check('aluno novo em ordem alfabética', run(`${sixth}.students[0]`), 'ANA NOVA DA SILVA');
+check('roster marca transferido', run(`getStudentMap().get('ARTHUR CARVALHO THOELE').transferred`), true);
+run('rebuildSchoolDependentState()');
+check('seleção descarta transferido', run('state.selectedStudents'), ['ANA NOVA DA SILVA']);
+check('histórico ainda acha registro do transferido', run(`state.historyFilters.subjectType = 'student'; state.historyFilters.subject = 'ARTHUR CARVALHO THOELE'; getFilteredReports().length > 0`), true);

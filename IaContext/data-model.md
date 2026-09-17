@@ -24,8 +24,15 @@ scrypt). Credenciais de teste estão no `README.md` — não duplicar aqui.
 ### `settings` (configuração por escola)
 `schools[]` — cada escola: `id`, `name`, `palette`, `schedule` (`start`/`end`),
 `occurrenceTypes[]`, `policies.disciplinaryMomentEnabled`, `studentNames` (objeto
-chaveado pelo nome oficial do aluno: `{ displayName, nicknames[] }` — só para a
-lista de seleção; relatórios/PDF usam sempre o nome oficial). Também guarda
+chaveado pelo nome oficial do aluno: `{ displayName, nicknames[], transferredAt }` —
+exibição/apelidos só para a lista de seleção; relatórios/PDF usam sempre o nome
+oficial) e `addedStudents[]` (`{ fullName, classKey, addedAt }`, alunos que chegaram
+depois da lista fixa `schoolClassGroups` do `app.js`).
+
+No cliente, `getClassGroupsForSchool()` junta a lista fixa com `addedStudents` e
+devolve `students` (só ativos: seleção, contagem, menções) e `allStudents`
+(inclui transferidos: histórico, Configuração). Transferido nunca é apagado,
+para não perder o histórico. Também guarda
 `holidays[]` (datas ISO) usadas no cálculo de dias úteis do momento disciplinar.
 
 ### `settings.timetable` (grade horária)

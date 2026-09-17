@@ -42,3 +42,9 @@ Decisao: cada escola guarda `studentNames` (chave = nome oficial) com `displayNa
 Motivo: alunos sao conhecidos por outros nomes/sobrenomes; isso facilita achar o aluno na lista de selecao.
 
 Regra: exibicao e apelidos valem so na tela. O PDF do Historico (que vai para os pais) usa sempre o nome oficial completo (`getStudentOfficialLabel`, `summarizeReports(..., { official: true })`). Os testes em `scripts/check-app-logic.js` barram apelido no PDF.
+
+## Alunos transferidos e alunos novos
+
+Decisao: transferencia e marcacao (`studentNames[nome].transferredAt`), nao remocao; alunos novos ficam em `school.addedStudents` e sao somados a lista fixa do `app.js`.
+
+Motivo: o aluno transferido tem registros e mencoes antigos que precisam continuar aparecendo no Historico e no PDF. So aluno incluido pela Configuracao pode ser removido (para corrigir erro de digitacao).

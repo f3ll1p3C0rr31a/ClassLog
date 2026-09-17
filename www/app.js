@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.2';
+const appVersion = '1.4.3';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -467,6 +467,8 @@ const elements = {
   settingsStudentClass: $('settingsStudentClass'),
   settingsStudentSearch: $('settingsStudentSearch'),
   settingsStudentNames: $('settingsStudentNames'),
+  settingsNewStudentName: $('settingsNewStudentName'),
+  settingsAddStudentButton: $('settingsAddStudentButton'),
   settingsSaveButton: $('settingsSaveButton'),
   settingsHint: $('settingsHint'),
   syncStatus: $('syncStatus'),
@@ -553,8 +555,25 @@ function getActiveSchool() {
   return getSchools().find((school) => school.id === state.selectedSchoolId) || getSchools()[0] || null;
 }
 
-function getClassGroupsForSchool(schoolId) {
-  return schoolClassGroups[schoolId] || schoolClassGroups.fatima || [];
+// Turmas = lista fixa acima + alunos adicionados na Configuração. `students` traz
+// só quem está ativo (seleção, contagem, menções); `allStudents` inclui os
+// transferidos, que continuam valendo para o histórico e para a Configuração.
+function getClassGroupsForSchool(schoolId, school = getSchools().find((entry) => entry.id === schoolId)) {
+  const baseGroups = schoolClassGroups[schoolId] || schoolClassGroups.fatima || [];
+  const added = Array.isArray(school?.addedStudents) ? school.addedStudents : [];
+  const names = school?.studentNames && typeof school.studentNames === 'object' ? school.studentNames : {};
+
+  return baseGroups.map((group) => {
+    const allStudents = [...new Set([
+      ...group.students,
+      ...added.filter((student) => student.classKey === group.key).map((student) => student.fullName),
+    ])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return {
+      ...group,
+      allStudents,
+      students: allStudents.filter((fullName) => !names[fullName]?.transferredAt),
+    };
+  });
 }
 
 function getCurrentClassGroups() {
@@ -596,9 +615,8 @@ function getStudentNameOverrides(schoolId) {
   return school?.studentNames && typeof school.studentNames === 'object' ? school.studentNames : {};
 }
 
-function buildStudentRoster(groups, schoolId = state.selectedSchoolId) {
-  const overrides = getStudentNameOverrides(schoolId);
-  const names = groups.flatMap((group) => group.students);
+function buildStudentRoster(groups, schoolId = state.selectedSchoolId, overrides = getStudentNameOverrides(schoolId)) {
+  const names = groups.flatMap((group) => group.allStudents || group.students);
   const firstNameCounts = names.reduce((counts, fullName) => {
     const firstName = normalizeKey(fullName.split(/\s+/)[0]);
     counts[firstName] = (counts[firstName] || 0) + 1;
@@ -617,7 +635,7 @@ function buildStudentRoster(groups, schoolId = state.selectedSchoolId) {
       targetType: 'class',
     };
 
-    const students = group.students.map((fullName) => {
+    const students = (group.allStudents || group.students).map((fullName) => {
     const parts = fullName.split(/\s+/);
     const firstName = parts[0];
     const lastName = parts[parts.length - 1];
@@ -629,6 +647,7 @@ function buildStudentRoster(groups, schoolId = state.selectedSchoolId) {
       displayName: override.displayName || defaultDisplayName,
       defaultDisplayName,
       nicknames: Array.isArray(override.nicknames) ? override.nicknames : [],
+      transferred: Boolean(override.transferredAt),
       firstName: titleCase(firstName),
       classKey: group.key,
       classLabel: group.label,
@@ -682,7 +701,7 @@ function rebuildSchoolDependentState() {
   }
 
   const studentsByName = getStudentMap();
-  state.selectedStudents = state.selectedStudents.filter((fullName) => studentsByName.has(fullName));
+  state.selectedStudents = state.selectedStudents.filter((fullName) => studentsByName.has(fullName) && !studentsByName.get(fullName).transferred);
 
   const occurrenceTypes = getOccurrenceTypes();
   state.selectedOccurrences = state.selectedOccurrences.filter((type) => occurrenceTypes.includes(type));
@@ -1320,7 +1339,7 @@ function renderStudentChips() {
   const disciplinaryByStudent = getDisciplinaryMap();
 
   const filtered = studentRoster.filter((student) => {
-    if (student.classKey !== state.selectedClass) return false;
+    if (student.classKey !== state.selectedClass || student.transferred) return false;
     if (!query) return true;
     return (
       normalizeKey(student.displayName).includes(query)
@@ -2239,7 +2258,7 @@ function renderHistorySubjectControls() {
     getStudentRoster().filter((student) => student.targetType === 'student').forEach((student) => {
       const option = document.createElement('option');
       option.value = student.fullName;
-      option.textContent = `${student.displayName} · ${student.classLabel}`;
+      option.textContent = `${student.displayName} · ${student.classLabel}${student.transferred ? ' (transferido)' : ''}`;
       select.appendChild(option);
     });
   } else if (filters.subjectType === 'class') {
@@ -3388,7 +3407,11 @@ function fillSettingsForm() {
   // renderAll() chama esta função várias vezes; só recomeça o rascunho dos nomes
   // quando troca a escola, para não perder o que foi digitado e ainda não salvo.
   if (state.studentNamesDraft?.schoolId !== school.id) {
-    state.studentNamesDraft = { schoolId: school.id, names: JSON.parse(JSON.stringify(school.studentNames || {})) };
+    state.studentNamesDraft = {
+      schoolId: school.id,
+      names: JSON.parse(JSON.stringify(school.studentNames || {})),
+      added: JSON.parse(JSON.stringify(school.addedStudents || [])),
+    };
     renderSettingsStudentClassSelect(school.id);
   }
   renderSettingsStudentNames();
@@ -3408,18 +3431,70 @@ function renderSettingsStudentClassSelect(schoolId) {
   elements.settingsStudentClass.value = groups.some((group) => group.key === previous) ? previous : groups[0]?.key || '';
 }
 
+function getTodayDateOnly() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function formatDateOnly(value) {
+  const [year, month, day] = String(value || '').split('-');
+  return year && month && day ? `${day}/${month}/${year}` : '';
+}
+
+function addSettingsStudent() {
+  const draft = state.studentNamesDraft;
+  const classKey = elements.settingsStudentClass?.value || '';
+  const fullName = String(elements.settingsNewStudentName?.value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  if (!draft || !classKey || !fullName) return;
+
+  if (fullName.split(' ').length < 2) {
+    showToast('Informe o nome completo do aluno, como vai sair no relatório.');
+    return;
+  }
+
+  const draftSchool = { id: draft.schoolId, addedStudents: draft.added, studentNames: draft.names };
+  const group = getClassGroupsForSchool(draft.schoolId, draftSchool).find((entry) => entry.key === classKey);
+  const existing = (group?.allStudents || []).find((name) => normalizeKey(name) === normalizeKey(fullName));
+  if (existing) {
+    if (draft.names[existing]?.transferredAt) {
+      // Aluno que volta: reativa em vez de duplicar.
+      draft.names[existing] = { ...draft.names[existing], transferredAt: '' };
+      showToast('Este aluno estava como transferido e foi reativado.');
+    } else {
+      showToast('Este aluno já está na turma.');
+      return;
+    }
+  } else {
+    draft.added.push({ fullName, classKey, addedAt: getTodayDateOnly() });
+  }
+
+  elements.settingsNewStudentName.value = '';
+  if (elements.settingsStudentSearch) elements.settingsStudentSearch.value = '';
+  renderSettingsStudentNames();
+  setSettingsHint('Aluno incluído. Clique em "Salvar configurações" para aplicar.');
+}
+
+function setSettingsHint(text) {
+  if (elements.settingsHint) elements.settingsHint.textContent = text;
+}
+
 function renderSettingsStudentNames() {
   if (!elements.settingsStudentNames || !state.studentNamesDraft) return;
 
-  const { schoolId, names } = state.studentNamesDraft;
+  const { schoolId, names, added } = state.studentNamesDraft;
+  const draftSchool = { id: schoolId, addedStudents: added, studentNames: names };
   const classKey = elements.settingsStudentClass?.value || '';
   const query = normalizeKey((elements.settingsStudentSearch?.value || '').trim());
-  const students = buildStudentRoster(getClassGroupsForSchool(schoolId), schoolId).filter((student) => {
-    if (student.targetType !== 'student' || student.classKey !== classKey) return false;
-    if (!query) return true;
-    const entry = names[student.fullName] || {};
-    return [student.fullName, entry.displayName, ...(entry.nicknames || [])].some((value) => normalizeKey(value).includes(query));
-  });
+  const addedNames = new Set(added.filter((student) => student.classKey === classKey).map((student) => student.fullName));
+  const students = buildStudentRoster(getClassGroupsForSchool(schoolId, draftSchool), schoolId, names)
+    .filter((student) => {
+      if (student.targetType !== 'student' || student.classKey !== classKey) return false;
+      if (!query) return true;
+      const entry = names[student.fullName] || {};
+      return [student.fullName, entry.displayName, ...(entry.nicknames || [])].some((value) => normalizeKey(value).includes(query));
+    })
+    // Transferidos vão para o fim, para a turma ativa ficar em cima.
+    .sort((a, b) => Number(a.transferred) - Number(b.transferred));
 
   elements.settingsStudentNames.innerHTML = '';
   if (students.length === 0) {
@@ -3431,18 +3506,35 @@ function renderSettingsStudentNames() {
   }
 
   const updateEntry = (fullName, patch) => {
-    const next = { displayName: '', nicknames: [], ...names[fullName], ...patch };
-    if (next.displayName || next.nicknames.length > 0) names[fullName] = next;
+    const next = { displayName: '', nicknames: [], transferredAt: '', ...names[fullName], ...patch };
+    if (next.displayName || next.nicknames.length > 0 || next.transferredAt) names[fullName] = next;
     else delete names[fullName];
   };
 
   students.forEach((student) => {
     const entry = names[student.fullName] || {};
+    const isAdded = addedNames.has(student.fullName);
     const row = document.createElement('div');
-    row.className = 'student-name-row';
+    row.className = `student-name-row${student.transferred ? ' is-transferred' : ''}`;
 
+    const header = document.createElement('div');
+    header.className = 'student-name-head';
     const official = document.createElement('strong');
     official.textContent = titleCase(student.fullName);
+    header.appendChild(official);
+    if (isAdded) {
+      const badge = document.createElement('small');
+      badge.className = 'student-badge';
+      const addedAt = added.find((item) => item.classKey === classKey && item.fullName === student.fullName)?.addedAt;
+      badge.textContent = addedAt ? `Novo · ${formatDateOnly(addedAt)}` : 'Novo';
+      header.appendChild(badge);
+    }
+    if (student.transferred) {
+      const badge = document.createElement('small');
+      badge.className = 'student-badge transferred';
+      badge.textContent = `Transferido · ${formatDateOnly(entry.transferredAt)}`;
+      header.appendChild(badge);
+    }
 
     const displayField = document.createElement('label');
     displayField.className = 'field';
@@ -3469,7 +3561,42 @@ function renderSettingsStudentNames() {
     }));
     nicknameField.append(nicknameLabel, nicknameInput);
 
-    row.append(official, displayField, nicknameField);
+    const actions = document.createElement('div');
+    actions.className = 'student-name-actions';
+    const transferLabel = document.createElement('label');
+    transferLabel.className = 'checkbox-row';
+    const transferInput = document.createElement('input');
+    transferInput.type = 'checkbox';
+    transferInput.checked = student.transferred;
+    transferInput.addEventListener('change', () => {
+      updateEntry(student.fullName, { transferredAt: transferInput.checked ? getTodayDateOnly() : '' });
+      renderSettingsStudentNames();
+      setSettingsHint('Clique em "Salvar configurações" para aplicar.');
+    });
+    const transferText = document.createElement('span');
+    transferText.textContent = 'Transferido';
+    transferLabel.append(transferInput, transferText);
+    actions.appendChild(transferLabel);
+
+    // Só aluno incluído aqui pode ser removido (para corrigir erro de digitação);
+    // os da lista oficial saem marcando transferido, para não perder o histórico.
+    if (isAdded) {
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'ghost-button';
+      removeButton.textContent = 'Remover';
+      removeButton.addEventListener('click', () => {
+        if (!window.confirm(`Remover ${titleCase(student.fullName)} da turma? Use isto só para corrigir um cadastro errado; para quem saiu da escola, marque "Transferido".`)) return;
+        const index = added.findIndex((item) => item.classKey === classKey && item.fullName === student.fullName);
+        if (index >= 0) added.splice(index, 1);
+        delete names[student.fullName];
+        renderSettingsStudentNames();
+        setSettingsHint('Clique em "Salvar configurações" para aplicar.');
+      });
+      actions.appendChild(removeButton);
+    }
+
+    row.append(header, displayField, nicknameField, actions);
     elements.settingsStudentNames.appendChild(row);
   });
 }
@@ -3506,6 +3633,7 @@ async function saveSettings() {
         disciplinaryMomentEnabled: Boolean(elements.settingsDisciplinaryToggle?.checked),
       },
       studentNames: state.studentNamesDraft?.schoolId === schoolId ? state.studentNamesDraft.names : school.studentNames || {},
+      addedStudents: state.studentNamesDraft?.schoolId === schoolId ? state.studentNamesDraft.added : school.addedStudents || [],
     };
   });
 
@@ -4557,6 +4685,19 @@ function bindEvents() {
 
   if (elements.settingsStudentSearch) {
     elements.settingsStudentSearch.addEventListener('input', renderSettingsStudentNames);
+  }
+
+  if (elements.settingsAddStudentButton) {
+    elements.settingsAddStudentButton.addEventListener('click', addSettingsStudent);
+  }
+
+  if (elements.settingsNewStudentName) {
+    elements.settingsNewStudentName.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addSettingsStudent();
+      }
+    });
   }
 
   if (elements.settingsSaveButton) {
