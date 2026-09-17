@@ -34,3 +34,11 @@ Decisao: manter `data/classlog-db.json` por enquanto.
 Motivo: projeto ainda e simples e leve.
 
 Risco conhecido: banco JSON e limitado para uso oficial em producao. O README registra como proximo passo trocar por banco relacional e revisar permissoes por perfil.
+
+## Nome de exibicao e apelidos dos alunos
+
+Decisao: cada escola guarda `studentNames` (chave = nome oficial) com `displayName` e `nicknames[]`, editados na aba Configuracao.
+
+Motivo: alunos sao conhecidos por outros nomes/sobrenomes; isso facilita achar o aluno na lista de selecao.
+
+Regra: exibicao e apelidos valem so na tela. O PDF do Historico (que vai para os pais) usa sempre o nome oficial completo (`getStudentOfficialLabel`, `summarizeReports(..., { official: true })`). Os testes em `scripts/check-app-logic.js` barram apelido no PDF.

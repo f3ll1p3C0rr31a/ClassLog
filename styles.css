@@ -1788,3 +1788,53 @@ body.handwriting-open {
     text-align: right;
   }
 }
+
+/* Nomes de exibição e apelidos dos alunos (Configuração) */
+.student-names-settings {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.student-names-settings h3 {
+  margin: 0;
+}
+
+.student-names-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.student-name-row {
+  display: grid;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.student-name-row .field {
+  margin-top: 4px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.student-name-row .field span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+@media (min-width: 760px) {
+  .student-name-row {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: end;
+  }
+
+  .student-name-row strong {
+    align-self: center;
+  }
+}

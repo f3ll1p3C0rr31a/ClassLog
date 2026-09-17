@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(tsx|ts|jsx\\)$\")",
+      "Bash(awk -F: '{if \\($1 < 3009\\) print}')",
+      "Bash(node --check app.js)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(git push *)",
+      "Read(//home/fellipecorreia/.ssh/**)",
+      "Bash(gh auth *)",
+      "Bash(git remote *)",
+      "Bash(ssh -T git@github.com -o StrictHostKeyChecking=accept-new)",
+      "Bash(ssh -T git@github.com -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 -v)",
+      "Bash(ssh -T git@github.com -o IdentitiesOnly=yes -i ~/.ssh/jupiter)",
+      "Bash(env)",
+      "Read(//home/fellipecorreia/**)",
+      "Bash(find / -maxdepth 4 -iname \"*.git-credentials\")",
+      "Bash(ssh-keygen -t ed25519 -f ~/.ssh/github_classlog -N \"\" -C \"fellipecorreia@Hera-classlog\")",
+      "Bash(sudo -n true)",
+      "Bash(sudo pacman -S --noconfirm github-cli)",
+      "Bash(gh --version)",
+      "Bash(gh ssh-key *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git fetch *)",
+      "Bash(gh run *)"
+    ]
+  }
+}

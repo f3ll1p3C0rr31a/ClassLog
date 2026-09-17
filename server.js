@@ -544,7 +544,32 @@ function normalizeSchool(entry, fallback) {
     policies: {
       disciplinaryMomentEnabled: Boolean(entry?.policies?.disciplinaryMomentEnabled ?? defaultSchool?.policies?.disciplinaryMomentEnabled),
     },
+    studentNames: normalizeStudentNames(entry?.studentNames),
   };
+}
+
+// Nome de exibição e apelidos por aluno, chaveados pelo nome oficial. Só valem
+// na lista de seleção; relatórios continuam saindo com o nome oficial completo.
+function normalizeStudentNames(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {};
+  }
+
+  const result = {};
+  for (const [rawFullName, value] of Object.entries(input)) {
+    const fullName = String(rawFullName || '').trim();
+    if (!fullName) continue;
+    const displayName = String(value?.displayName || '').trim().slice(0, 60);
+    const nicknames = [...new Set(
+      (Array.isArray(value?.nicknames) ? value.nicknames : [])
+        .map((nickname) => String(nickname || '').trim().slice(0, 40))
+        .filter(Boolean),
+    )].slice(0, 10);
+    if (displayName || nicknames.length > 0) {
+      result[fullName] = { displayName, nicknames };
+    }
+  }
+  return result;
 }
 
 function normalizeSettings(settingsInput) {

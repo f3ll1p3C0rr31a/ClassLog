@@ -168,3 +168,15 @@ check('tem doctype', html.slice(0, 15).toLowerCase(), '<!doctype html>');
 check('cita a turma', html.includes('6 ano'), true);
 check('escapa aspas/HTML', html.includes('<script'), false);
 console.log(`     (documento com ${html.length} caracteres)`);
+
+console.log('--- nome de exibição e apelidos ---');
+run(`state.settings.schools = [{ id: 'fatima', name: 'Fátima', studentNames: { 'ARTHUR CARVALHO THOELE': { displayName: 'Tuca', nicknames: ['Arthurzinho'] } } }];
+  state.selectedSchoolId = 'fatima';
+  state.historyFilters = { ...state.historyFilters, termKey: '', subjectType: 'student', subject: 'ARTHUR CARVALHO THOELE', recordKind: '', status: '' };`);
+check('lista usa o nome de exibição', run(`getStudentMap().get('ARTHUR CARVALHO THOELE').displayName`), 'Tuca');
+check('lista guarda os apelidos', run(`getStudentMap().get('ARTHUR CARVALHO THOELE').nicknames`), ['Arthurzinho']);
+check('resumo na tela usa exibição', run(`summarizeReports(getFilteredReports()).byStudent.map((row) => row[0])`), ['Tuca', '6 ano']);
+check('resumo do PDF usa nome oficial', run(`summarizeReports(getFilteredReports(), { official: true }).byStudent.map((row) => row[0])`), ['Arthur Carvalho Thoele', '6 ano (turma)']);
+const namedHtml = run('buildHistoryReportDocument(getFilteredReports())');
+check('PDF traz o nome oficial', namedHtml.includes('Arthur Carvalho Thoele'), true);
+check('PDF não traz exibição nem apelido', /Tuca|Arthurzinho/.test(namedHtml), false);

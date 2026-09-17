@@ -23,7 +23,9 @@ scrypt). Credenciais de teste estão no `README.md` — não duplicar aqui.
 
 ### `settings` (configuração por escola)
 `schools[]` — cada escola: `id`, `name`, `palette`, `schedule` (`start`/`end`),
-`occurrenceTypes[]`, `policies.disciplinaryMomentEnabled`. Também guarda
+`occurrenceTypes[]`, `policies.disciplinaryMomentEnabled`, `studentNames` (objeto
+chaveado pelo nome oficial do aluno: `{ displayName, nicknames[] }` — só para a
+lista de seleção; relatórios/PDF usam sempre o nome oficial). Também guarda
 `holidays[]` (datas ISO) usadas no cálculo de dias úteis do momento disciplinar.
 
 ### `settings.timetable` (grade horária)
