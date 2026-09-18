@@ -105,7 +105,7 @@ function createDomStubs(page) {
 }
 
 /** Uma carga de página: cria o contexto, roda o app.js e espera o initPage. */
-async function loadPage({ page, offline, session }) {
+async function loadPage({ page, offline, session, authMe = () => ({ user: USER }) }) {
   const document = createDomStubs(page);
   const jsonResponse = (body) => ({
     ok: true,
@@ -131,7 +131,7 @@ async function loadPage({ page, offline, session }) {
     location: { href: '', pathname: '/index.html', search: '' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     fetch: async (url) => {
-      if (String(url).includes('/api/auth/me')) return jsonResponse({ user: USER });
+      if (String(url).includes('/api/auth/me')) return jsonResponse(authMe());
       if (String(url).includes('/api/context')) {
         return jsonResponse({ user: USER, settings: SETTINGS, activeSchoolId: DETECTED_SCHOOL });
       }
@@ -215,6 +215,26 @@ function check(name, actual, expected) {
   page6.run("onSchoolChange('ec303', false)");
   for (let i = 0; i < 30; i += 1) await new Promise((resolve) => setImmediate(resolve));
   check('override limpo na troca automática', session6.getItem('classlog-school-override-v1'), null);
+
+  console.log('\n--- token vencido: servidor responde, mas sem usuário ---');
+  // Bug: o app tratava isso como falta de internet, entrava na sessão offline
+  // (ainda válida localmente) e ficava dias com as configurações antigas.
+  const offline7 = createOfflineStore();
+  const session7 = createSessionStorage();
+  await offline7.saveSession({ user: USER, activeSchoolId: 'ec303', expiresAt: Date.now() + 86400000, mobileToken: 'velho' });
+  await offline7.saveContext('coordenacao::ec303', { settings: { ...SETTINGS, schools: [] }, activeSchoolId: 'ec303' });
+  const page7 = await loadPage({ page: 'students', offline: offline7, session: session7, authMe: () => ({ user: null }) });
+  check('não entra no modo offline', page7.read('state.isOfflineSession'), false);
+  check('marca sessão expirada', page7.read('state.sessionExpired'), true);
+  check('manda para o login', page7.read('location.href'), 'login.html');
+  check('avisa o motivo no login', session7.getItem('classlog-session-expired-v1'), '1');
+
+  console.log('\n--- sessão deslizante: token novo do /me é guardado ---');
+  const offline8 = createOfflineStore();
+  await offline8.saveSession({ user: USER, activeSchoolId: 'ec303', expiresAt: Date.now() + 86400000, mobileToken: 'velho' });
+  const page8 = await loadPage({ page: 'students', offline: offline8, session: createSessionStorage(), authMe: () => ({ user: USER, token: 'novo' }) });
+  check('usa o token renovado', page8.read('state.mobileToken'), 'novo');
+  check('grava o token renovado na sessão offline', (await offline8.getSession()).mobileToken, 'novo');
 
   const failed = results.filter((ok) => !ok).length;
   console.log(`\n${results.length - failed}/${results.length} verificações passaram`);

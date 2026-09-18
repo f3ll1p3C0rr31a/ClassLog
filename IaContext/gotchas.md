@@ -124,3 +124,18 @@ passa por `applyDetectedSchool()`, que respeita o override.
 
 Regra prática: rascunho é para o que pertence à ocorrência sendo montada.
 O que vale para a sessão (qual escola estou vendo) vai no override.
+
+## 14. Token vencido virava "modo offline" silencioso
+`/api/auth/me` responde **200 com `{ user: null }`** quando o token não vale
+mais — não 401. O `loadAuthUser()` tratava isso igual a falta de rede e caía na
+sessão offline local (válida por 7 dias a partir do último contexto carregado).
+Como o token do app vencia 7 dias depois do **login** e nunca era renovado, o
+celular passava a rodar em silêncio com a cópia antiga das configurações:
+nomes/alunos mudados na web não apareciam, e Logs novos ficavam presos na fila.
+
+Correção: (1) `/api/auth/me` devolve um token novo a cada verificação (sessão
+deslizante; `token` no corpo para o app, `Set-Cookie` para a web); (2) resposta
+do servidor sem usuário = sessão expirada → vai para o login com aviso, nunca
+para o modo offline; o offline só vale quando o servidor **não responde**;
+(3) ao voltar para a tela (`visibilitychange`), o app rebusca as configurações.
+Regressão coberta em `scripts/check-school-selection.js`.

@@ -1511,7 +1511,21 @@ async function handleApi(req, res, url) {
 
   if (url.pathname === '/api/auth/me' && req.method === 'GET') {
     const user = getUserFromRequest(req);
-    sendJson(res, 200, { user: user || null });
+    if (!user) {
+      sendJson(res, 200, { user: null });
+      return;
+    }
+    // Sessão deslizante: cada verificação devolve um token novo. Sem isso o
+    // token do app vencia 7 dias depois do login mesmo com uso diário, e o app
+    // passava a rodar em silêncio com a cópia offline das configurações.
+    const token = signSession(user.username);
+    const isNativeRequest = ALLOWED_CORS_ORIGINS.has(String(req.headers.origin || ''));
+    sendJson(
+      res,
+      200,
+      { user, ...(isNativeRequest ? { token } : {}) },
+      { 'Set-Cookie': `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800` },
+    );
     return;
   }
 

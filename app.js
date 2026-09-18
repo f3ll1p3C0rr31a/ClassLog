@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.3';
+const appVersion = '1.4.4';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -298,6 +298,8 @@ const state = {
   },
   authUser: null,
   mobileToken: '',
+  sessionExpired: false,
+  contextRefreshedAt: 0,
   activeReportId: null,
   isOfflineSession: false,
   syncState: 'idle',
@@ -784,11 +786,21 @@ async function loadAuthUser() {
     const response = await apiRequest('/api/auth/me', { method: 'GET', timeoutMs: 3000 });
     if (response.user) {
       state.authUser = response.user;
+      if (response.token) state.mobileToken = response.token;
       state.isOfflineSession = false;
+      state.sessionExpired = false;
       return response.user;
     }
+    // O servidor respondeu, mas não reconhece mais o token: é sessão vencida,
+    // não falta de internet. Cair na sessão offline aqui deixava o app preso na
+    // cópia antiga das configurações. Os Logs pendentes ficam na fila e sobem
+    // depois do novo login (a fila é por usuário, não por token).
+    state.authUser = null;
+    state.mobileToken = '';
+    state.sessionExpired = true;
+    return null;
   } catch {
-    // Fall through to the local authorization.
+    // Sem resposta do servidor: aí sim vale a autorização local.
   }
 
   if (isOfflineSessionValid(localSession)) {
@@ -1067,7 +1079,10 @@ function renderSyncStatus() {
 
   let label = 'Tudo sincronizado';
   let status = 'synced';
-  if (!navigator.onLine || state.isOfflineSession) {
+  if (state.sessionExpired) {
+    label = 'Sessão expirada · entre de novo';
+    status = 'error';
+  } else if (!navigator.onLine || state.isOfflineSession) {
     label = state.pendingCount > 0 ? `Offline · ${state.pendingCount} pendente(s)` : 'Offline';
     status = 'offline';
   } else if (state.syncState === 'syncing') {
@@ -1146,6 +1161,18 @@ function updateStats() {
 
 function navigate(pageName) {
   window.location.href = pageMap[pageName] || pageMap.students;
+}
+
+const sessionExpiredKey = 'classlog-session-expired-v1';
+
+// Leva ao login avisando o motivo, para não parecer que o app deslogou sozinho.
+function navigateToLoginExpired() {
+  try {
+    sessionStorage.setItem(sessionExpiredKey, '1');
+  } catch {
+    // Sem sessionStorage o login abre sem o aviso.
+  }
+  navigate('login');
 }
 
 function canEditReport(report) {
@@ -3056,11 +3083,18 @@ async function synchronizePendingReports() {
     try {
       const response = await apiRequest('/api/auth/me', { method: 'GET', timeoutMs: 3000 });
       if (!response.user || response.user.username !== state.authUser.username) {
+        if (!response.user) {
+          state.sessionExpired = true;
+          state.syncError = 'Sessão expirada. Entre novamente para sincronizar.';
+          renderSyncStatus();
+        }
         await refreshPendingCount();
         return;
       }
       state.authUser = response.user;
+      if (response.token) state.mobileToken = response.token;
       state.isOfflineSession = false;
+      state.sessionExpired = false;
       await loadContext();
       await loadReports();
       renderAll();
@@ -3134,6 +3168,34 @@ async function synchronizePendingReports() {
   if (state.pendingCount > 0) await requestBackgroundSync();
 }
 
+// O app do celular fica aberto por dias em segundo plano. Ao voltar para a
+// tela, busca as configurações de novo para pegar o que foi mudado em outro
+// aparelho (nomes, alunos, cores). A Configuração fica de fora para não
+// sobrescrever o formulário que está sendo editado.
+async function refreshContextOnResume() {
+  if (state.page === 'settings' || state.isOfflineSession || !navigator.onLine || !state.authUser) return;
+  if (Date.now() - state.contextRefreshedAt < 30 * 1000) return;
+  state.contextRefreshedAt = Date.now();
+  try {
+    // Só as configurações: a escola da tela não muda por baixo de quem está
+    // montando um Log (a detecção por horário continua valendo ao abrir páginas).
+    const response = await apiRequest('/api/context', { method: 'GET', timeoutMs: 4000 });
+    if (!response.settings) return;
+    state.settings = response.settings;
+    const cached = await window.ClassLogOffline.getContext(getOfflineScope());
+    await window.ClassLogOffline.saveContext(getOfflineScope(), {
+      ...cached,
+      settings: state.settings,
+      activeSchoolId: cached?.activeSchoolId || state.selectedSchoolId,
+      savedAt: new Date().toISOString(),
+    });
+    rebuildSchoolDependentState();
+    renderAll();
+  } catch {
+    // Sem rede: fica com o que já está na tela.
+  }
+}
+
 function setupAutomaticSync() {
   if (state.syncTimer) clearInterval(state.syncTimer);
   state.syncTimer = setInterval(() => {
@@ -3146,7 +3208,13 @@ function setupAutomaticSync() {
   });
   window.addEventListener('offline', renderSyncStatus);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') synchronizePendingReports();
+    if (document.visibilityState !== 'visible') return;
+    if (state.sessionExpired) {
+      navigateToLoginExpired();
+      return;
+    }
+    synchronizePendingReports();
+    refreshContextOnResume();
   });
   navigator.serviceWorker?.addEventListener('message', (event) => {
     if (event.data?.type === 'CLASSLOG_SYNC') synchronizePendingReports();
@@ -4750,12 +4818,21 @@ async function initPage() {
     updateHeader();
     bindEvents();
     if (elements.loginNext) elements.loginNext.value = getPageNextRedirect();
+    try {
+      if (sessionStorage.getItem(sessionExpiredKey) && elements.loginHint) {
+        elements.loginHint.textContent = 'Sua sessão expirou. Entre de novo; os Logs pendentes sobem logo depois.';
+      }
+      sessionStorage.removeItem(sessionExpiredKey);
+    } catch {
+      // Sem sessionStorage, fica o texto padrão.
+    }
     if (elements.loginUsername) elements.loginUsername.focus();
     return;
   }
 
   if (!state.authUser) {
-    navigate('login');
+    if (state.sessionExpired) navigateToLoginExpired();
+    else navigate('login');
     return;
   }
 
