@@ -19,7 +19,7 @@
           <p class="hero-copy" id="pageDescription">Acompanhe cálculo automático, ajustes manuais e fechamento bimestral.</p>
         </div>
         <div class="hero-actions">
-          <span class="version-badge" id="versionBadge">v1.4.4 · ALPHA</span>
+          <span class="version-badge" id="versionBadge">v1.4.5 · ALPHA</span>
           <span class="session-label school-badge" id="schoolBadge"></span>
           <label class="school-picker" for="schoolSelect">
             <span>Escola</span>
@@ -61,7 +61,10 @@
             <p class="eyebrow">Bimestre</p>
             <h2>Painel de menções</h2>
           </div>
-          <button class="ghost-button" type="button" id="gradesRefreshButton">Atualizar</button>
+          <div class="panel-actions">
+            <button class="ghost-button" type="button" id="gradesExportButton">Exportar PDF</button>
+            <button class="ghost-button" type="button" id="gradesRefreshButton">Atualizar</button>
+          </div>
         </div>
 
         <div class="history-filter-grid">
@@ -72,6 +75,14 @@
           <label class="field">
             <span>Bimestre</span>
             <select id="gradesTermSelect"></select>
+          </label>
+          <label class="field">
+            <span>Matéria</span>
+            <select id="gradesSubjectSelect"></select>
+          </label>
+          <label class="field">
+            <span>Menção final</span>
+            <select id="gradesMentionSelect"></select>
           </label>
           <label class="field">
             <span>Buscar aluno</span>

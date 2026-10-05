@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.4';
+const appVersion = '1.4.5';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -273,6 +273,10 @@ const state = {
     classKey: '',
     termKey: '',
     query: '',
+    // 'all' lista as turmas todas de uma vez; subject/mention filtram pelo
+    // fechamento final de cada matéria.
+    subject: '',
+    mention: '',
   },
   gradeSelection: new Set(),
   gradeBulkEditMode: false,
@@ -445,6 +449,9 @@ const elements = {
   gradesClassSelect: $('gradesClassSelect'),
   gradesTermSelect: $('gradesTermSelect'),
   gradesSearch: $('gradesSearch'),
+  gradesSubjectSelect: $('gradesSubjectSelect'),
+  gradesMentionSelect: $('gradesMentionSelect'),
+  gradesExportButton: $('gradesExportButton'),
   gradesRefreshButton: $('gradesRefreshButton'),
   gradesHint: $('gradesHint'),
   gradesTableBody: $('gradesTableBody'),
@@ -560,6 +567,8 @@ function getActiveSchool() {
 // Turmas = lista fixa acima + alunos adicionados na Configuração. `students` traz
 // só quem está ativo (seleção, contagem, menções); `allStudents` inclui os
 // transferidos, que continuam valendo para o histórico e para a Configuração.
+const allClassesKey = 'all';
+
 function getClassGroupsForSchool(schoolId, school = getSchools().find((entry) => entry.id === schoolId)) {
   const baseGroups = schoolClassGroups[schoolId] || schoolClassGroups.fatima || [];
   const added = Array.isArray(school?.addedStudents) ? school.addedStudents : [];
@@ -695,7 +704,7 @@ function rebuildSchoolDependentState() {
   if (!classKeys.has(state.selectedClass)) {
     state.selectedClass = classes[0]?.key || '';
   }
-  if (!classKeys.has(state.gradeFilters.classKey)) {
+  if (state.gradeFilters.classKey !== allClassesKey && !classKeys.has(state.gradeFilters.classKey)) {
     state.gradeFilters.classKey = state.selectedClass || classes[0]?.key || '';
   }
   if (!state.gradeFilters.termKey) {
@@ -980,7 +989,8 @@ async function loadGradeRecords() {
     return;
   }
 
-  const classKey = state.gradeFilters.classKey || state.selectedClass;
+  const selectedClassKey = state.gradeFilters.classKey || state.selectedClass;
+  const classKey = selectedClassKey === allClassesKey ? '' : selectedClassKey;
   const termKey = state.gradeFilters.termKey || getDefaultTermKey();
   try {
     const response = await apiRequest(
@@ -1565,10 +1575,19 @@ function normalizeMentionClient(value) {
   return mentionOrder.includes(mention) ? mention : '';
 }
 
+// A turma vem do aluno, não do filtro: com "todas as turmas" na tela, o filtro
+// não aponta para turma nenhuma.
+function getStudentClassKey(studentFullName) {
+  const fromRoster = getStudentMap().get(studentFullName)?.classKey;
+  if (fromRoster) return fromRoster;
+  return state.gradeFilters.classKey === allClassesKey ? '' : state.gradeFilters.classKey;
+}
+
 function getGradeRecord(studentFullName) {
+  const classKey = getStudentClassKey(studentFullName);
   return state.gradeRecords.find((record) => (
     record.schoolId === state.selectedSchoolId
-    && record.classKey === state.gradeFilters.classKey
+    && record.classKey === classKey
     && record.studentFullName === studentFullName
     && record.termKey === state.gradeFilters.termKey
   )) || null;
@@ -1736,7 +1755,7 @@ async function saveStudentGrade(studentFullName, patch) {
   const existing = getGradeRecord(studentFullName) || {};
   const payload = {
     schoolId: state.selectedSchoolId,
-    classKey: state.gradeFilters.classKey,
+    classKey: getStudentClassKey(studentFullName),
     studentFullName,
     termKey: state.gradeFilters.termKey,
     overrides: {
@@ -1766,10 +1785,61 @@ async function saveStudentGrade(studentFullName, patch) {
   }
 }
 
+const gradeSubjectOptions = [
+  { value: '', label: 'História e Filosofia' },
+  { value: 'history', label: 'História' },
+  { value: 'philosophy', label: 'Filosofia' },
+];
+
+function getGradeSubjectLabel(subject = state.gradeFilters.subject) {
+  return gradeSubjectOptions.find((option) => option.value === subject)?.label || 'História e Filosofia';
+}
+
+// Fechamento final de cada matéria, que é o que o filtro de menção olha.
+function getSubjectFinalMentions(grades) {
+  return { history: grades.finalMentions.final, philosophy: grades.finalMentions.philosophyFinal };
+}
+
+function gradesMatchMentionFilter(grades, filters = state.gradeFilters) {
+  if (!filters.mention) return true;
+  const finals = getSubjectFinalMentions(grades);
+  if (filters.subject === 'history') return finals.history === filters.mention;
+  if (filters.subject === 'philosophy') return finals.philosophy === filters.mention;
+  return finals.history === filters.mention || finals.philosophy === filters.mention;
+}
+
+// Lista única usada pela tabela, pelo "selecionar todos" e pelo PDF, para os
+// três mostrarem exatamente o mesmo recorte.
+function getFilteredGradeStudents() {
+  const filters = state.gradeFilters;
+  const studentMap = getStudentMap();
+  const query = normalizeKey(filters.query);
+  const groups = getCurrentClassGroups().filter((group) => (
+    filters.classKey === allClassesKey || group.key === (filters.classKey || state.selectedClass)
+  ));
+
+  const rows = [];
+  groups.forEach((group) => {
+    group.students.forEach((fullName) => {
+      const student = studentMap.get(fullName);
+      if (!student) return;
+      if (query && !normalizeKey(fullName).includes(query) && !normalizeKey(student.displayName).includes(query)) return;
+      const grades = calculateStudentGrades(student);
+      if (!gradesMatchMentionFilter(grades, filters)) return;
+      rows.push({ student, grades });
+    });
+  });
+  return rows;
+}
+
 function renderGradeControls() {
   if (!elements.gradesClassSelect || !elements.gradesTermSelect) return;
 
   elements.gradesClassSelect.innerHTML = '';
+  const allClasses = document.createElement('option');
+  allClasses.value = allClassesKey;
+  allClasses.textContent = 'Todas as turmas';
+  elements.gradesClassSelect.appendChild(allClasses);
   getCurrentClassGroups().forEach((classGroup) => {
     const option = document.createElement('option');
     option.value = classGroup.key;
@@ -1787,6 +1857,32 @@ function renderGradeControls() {
   });
   elements.gradesTermSelect.value = state.gradeFilters.termKey || getDefaultTermKey();
   if (elements.gradesSearch) elements.gradesSearch.value = state.gradeFilters.query;
+
+  if (elements.gradesSubjectSelect) {
+    elements.gradesSubjectSelect.innerHTML = '';
+    gradeSubjectOptions.forEach((option) => {
+      const node = document.createElement('option');
+      node.value = option.value;
+      node.textContent = option.label;
+      elements.gradesSubjectSelect.appendChild(node);
+    });
+    elements.gradesSubjectSelect.value = state.gradeFilters.subject;
+  }
+
+  if (elements.gradesMentionSelect) {
+    elements.gradesMentionSelect.innerHTML = '';
+    const any = document.createElement('option');
+    any.value = '';
+    any.textContent = 'Todas as menções';
+    elements.gradesMentionSelect.appendChild(any);
+    mentionOrder.forEach((mention) => {
+      const node = document.createElement('option');
+      node.value = mention;
+      node.textContent = mention;
+      elements.gradesMentionSelect.appendChild(node);
+    });
+    elements.gradesMentionSelect.value = state.gradeFilters.mention;
+  }
 }
 
 function createStatusControl(title, status, automaticStatus, selectedValue, onChange) {
@@ -1831,10 +1927,9 @@ function toggleGradeSelection(fullName, checked) {
 }
 
 function toggleAllGradeSelection(checked) {
-  const classGroup = getCurrentClassGroups().find((group) => group.key === state.gradeFilters.classKey) || getCurrentClassGroups()[0];
-  const query = normalizeKey(state.gradeFilters.query);
-  const fullNames = (classGroup?.students || []).filter((fullName) => !query || normalizeKey(fullName).includes(query));
-  fullNames.forEach((fullName) => (checked ? state.gradeSelection.add(fullName) : state.gradeSelection.delete(fullName)));
+  getFilteredGradeStudents().forEach(({ student }) => (
+    checked ? state.gradeSelection.add(student.fullName) : state.gradeSelection.delete(student.fullName)
+  ));
   if (state.gradeSelection.size <= 1) {
     state.gradeBulkEditMode = false;
     state.gradeBulkPatch = null;
@@ -1903,16 +1998,13 @@ function renderGrades() {
   if (!elements.gradesTableBody) return;
 
   renderGradeControls();
-  const classGroup = getCurrentClassGroups().find((group) => group.key === state.gradeFilters.classKey) || getCurrentClassGroups()[0];
-  const query = normalizeKey(state.gradeFilters.query);
-  const students = (classGroup?.students || [])
-    .filter((fullName) => !query || normalizeKey(fullName).includes(query))
-    .map((fullName) => getStudentMap().get(fullName))
-    .filter(Boolean);
+  const rows = getFilteredGradeStudents();
+  const students = rows.map((row) => row.student);
+  const gradesByStudent = new Map(rows.map((row) => [row.student.fullName, row.grades]));
 
   elements.gradesTableBody.innerHTML = '';
   if (elements.gradesHint) {
-    elements.gradesHint.textContent = `${students.length} aluno(s) em ${classGroup?.label || 'turma'} · ${state.gradeFilters.termKey.toUpperCase()}`;
+    elements.gradesHint.textContent = `${students.length} aluno(s) · ${describeGradesScope()}`;
   }
   renderGradeBulkBar();
 
@@ -1933,7 +2025,7 @@ function renderGrades() {
   }
 
   students.forEach((student) => {
-    const grades = calculateStudentGrades(student);
+    const grades = gradesByStudent.get(student.fullName) || calculateStudentGrades(student);
     const record = getGradeRecord(student.fullName) || {};
     const row = document.createElement('tr');
     const isSelected = state.gradeSelection.has(student.fullName);
@@ -1957,7 +2049,8 @@ function renderGrades() {
     const nameCell = document.createElement('th');
     nameCell.scope = 'row';
     nameCell.dataset.label = 'Aluno';
-    nameCell.innerHTML = `<strong>${student.displayName}</strong><small>${titleCase(student.fullName)}</small>`;
+    const nameSuffix = state.gradeFilters.classKey === allClassesKey ? ` · ${student.classLabel}` : '';
+    nameCell.innerHTML = `<strong>${student.displayName}</strong><small>${titleCase(student.fullName)}${nameSuffix}</small>`;
     row.appendChild(nameCell);
 
     [
@@ -2512,16 +2605,20 @@ function buildHistoryReportDocument(reports) {
 async function exportHistoryReport() {
   const reports = getFilteredReports();
   const html = buildHistoryReportDocument(reports);
-  const fileName = `ClassLog - ${getHistoryFocusLabel({ official: true })} - ${describeHistoryPeriod()}`.replace(/[\\/:*?"<>|]/g, '-');
+  const fileName = `ClassLog - ${getHistoryFocusLabel({ official: true })} - ${describeHistoryPeriod()}`;
+  await printHtmlDocument(html, fileName);
+}
+
+async function printHtmlDocument(html, rawFileName) {
+  const fileName = String(rawFileName).replace(/[\\/:*?"<>|]/g, '-');
 
   if (isNativeApp()) {
     try {
       await callNative('printDocument', { html, fileName });
-      return;
     } catch {
       showToast('Não foi possível abrir a impressão do Android.');
-      return;
     }
+    return;
   }
 
   // Um iframe fora da tela evita bloqueio de pop-up e não leva o CSS do app junto.
@@ -2544,6 +2641,133 @@ async function exportHistoryReport() {
     window.setTimeout(() => frame.remove(), 60000);
   };
   frame.srcdoc = html;
+}
+
+/* ---------- Relatório de menções ---------- */
+
+function describeGradesScope() {
+  const filters = state.gradeFilters;
+  const classLabel = filters.classKey === allClassesKey
+    ? 'Todas as turmas'
+    : getCurrentClassGroups().find((group) => group.key === (filters.classKey || state.selectedClass))?.label || 'Turma';
+  const term = getTermOptions().find((option) => option.value === filters.termKey)?.label || filters.termKey;
+  const mention = filters.mention ? `${getGradeSubjectLabel()} = ${filters.mention}` : getGradeSubjectLabel();
+  return `${classLabel} · ${term} · ${mention}`;
+}
+
+function summarizeGradeRows(rows) {
+  const empty = () => mentionOrder.reduce((counts, mention) => ({ ...counts, [mention]: 0 }), {});
+  const summary = {
+    total: rows.length,
+    history: empty(),
+    philosophy: empty(),
+    historyFailed: 0,
+    philosophyFailed: 0,
+  };
+
+  rows.forEach(({ grades }) => {
+    const finals = getSubjectFinalMentions(grades);
+    if (summary.history[finals.history] !== undefined) summary.history[finals.history] += 1;
+    if (summary.philosophy[finals.philosophy] !== undefined) summary.philosophy[finals.philosophy] += 1;
+    if (grades.status === 'failed') summary.historyFailed += 1;
+    if (grades.philosophyStatus === 'failed') summary.philosophyFailed += 1;
+  });
+
+  return summary;
+}
+
+function buildGradesReportDocument(rows) {
+  const summary = summarizeGradeRows(rows);
+  const school = getActiveSchool();
+  const primary = school?.palette?.primary || '#0f4ea8';
+  const generatedAt = new Date().toLocaleString('pt-BR');
+  const statusText = (status) => (status === 'failed' ? 'Reprovado' : 'Aprovado');
+
+  // Documento oficial: nome completo do aluno, nunca apelido ou nome de lista.
+  const tableRows = rows.map(({ student, grades }) => `
+      <tr>
+        <td>${escapeHtml(titleCase(student.fullName))}</td>
+        <td class="nowrap">${escapeHtml(student.classLabel)}</td>
+        <td class="center">${escapeHtml(grades.finalMentions.activity)}</td>
+        <td class="center">${escapeHtml(grades.finalMentions.behaviorValues)}</td>
+        <td class="center strong">${escapeHtml(grades.finalMentions.final)}</td>
+        <td class="nowrap">${escapeHtml(statusText(grades.status))}</td>
+        <td class="center strong">${escapeHtml(grades.finalMentions.philosophyFinal)}</td>
+        <td class="nowrap">${escapeHtml(statusText(grades.philosophyStatus))}</td>
+      </tr>`).join('');
+
+  const countRow = (label, counts) => `
+      <tr>
+        <td>${escapeHtml(label)}</td>
+        ${mentionOrder.map((mention) => `<td class="num">${counts[mention]}</td>`).join('')}
+      </tr>`;
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Menções ClassLog — ${escapeHtml(describeGradesScope())}</title>
+<style>
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #16202c; font-size: 11px; margin: 0; }
+  header { border-bottom: 3px solid ${primary}; padding-bottom: 10px; margin-bottom: 16px; }
+  h1 { font-size: 19px; margin: 0 0 4px; color: ${primary}; }
+  .meta { display: flex; flex-wrap: wrap; gap: 14px; color: #4a5a6b; font-size: 10px; }
+  h2 { font-size: 13px; margin: 18px 0 8px; color: ${primary}; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { border: 1px solid #d8e0ea; padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #eef3f9; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; width: 48px; }
+  td.center, th.center { text-align: center; width: 54px; }
+  td.strong { font-weight: 700; }
+  td.nowrap { white-space: nowrap; }
+  tr { break-inside: avoid; }
+  footer { margin-top: 18px; border-top: 1px solid #d8e0ea; padding-top: 8px; color: #7c8b9b; font-size: 9px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Relatório de menções</h1>
+    <div class="meta">
+      <span><strong>Recorte:</strong> ${escapeHtml(describeGradesScope())}</span>
+      <span><strong>Escola:</strong> ${escapeHtml(school?.name || '--')}</span>
+      <span><strong>Alunos:</strong> ${summary.total}</span>
+      <span><strong>Emitido em:</strong> ${escapeHtml(generatedAt)}</span>
+      <span><strong>Por:</strong> ${escapeHtml(state.authUser?.displayName || '--')}</span>
+    </div>
+  </header>
+
+  <h2>Fechamento por menção</h2>
+  <table>
+    <thead><tr><th>Matéria</th>${mentionOrder.map((mention) => `<th class="num">${mention}</th>`).join('')}</tr></thead>
+    <tbody>
+      ${countRow('História', summary.history)}
+      ${countRow('Filosofia', summary.philosophy)}
+    </tbody>
+  </table>
+  <p>Reprovados: História ${summary.historyFailed} · Filosofia ${summary.philosophyFailed}</p>
+
+  <h2>Alunos (${summary.total})</h2>
+  <table>
+    <thead>
+      <tr><th>Aluno</th><th>Turma</th><th class="center">Atv</th><th class="center">CeV</th><th class="center">Hist.</th><th>Situação</th><th class="center">Filo.</th><th>Situação</th></tr>
+    </thead>
+    <tbody>${tableRows || '<tr><td colspan="8">Nenhum aluno neste recorte.</td></tr>'}</tbody>
+  </table>
+
+  <footer>ClassLog v${escapeHtml(appVersion)} · documento gerado a partir dos filtros aplicados na guia Menções.</footer>
+</body>
+</html>`;
+}
+
+async function exportGradesReport() {
+  const rows = getFilteredGradeStudents();
+  if (rows.length === 0) {
+    showToast('Nenhum aluno neste recorte para exportar.');
+    return;
+  }
+  await printHtmlDocument(buildGradesReportDocument(rows), `ClassLog - Menções - ${describeGradesScope()}`);
 }
 
 function renderHistoryFilters() {
@@ -4713,6 +4937,24 @@ function bindEvents() {
       state.gradeFilters.query = elements.gradesSearch.value;
       renderGrades();
     });
+  }
+
+  if (elements.gradesSubjectSelect) {
+    elements.gradesSubjectSelect.addEventListener('change', () => {
+      state.gradeFilters.subject = elements.gradesSubjectSelect.value;
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesMentionSelect) {
+    elements.gradesMentionSelect.addEventListener('change', () => {
+      state.gradeFilters.mention = elements.gradesMentionSelect.value;
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesExportButton) {
+    elements.gradesExportButton.addEventListener('click', exportGradesReport);
   }
 
   if (elements.gradesRefreshButton) {

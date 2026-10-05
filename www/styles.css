@@ -384,6 +384,12 @@ h1 {
   display: none !important;
 }
 
+/* O atributo hidden perde para qualquer display explícito (flex/grid) — sem
+   isto a barra de edição em lote aparecia mesmo sem ninguém selecionado. */
+[hidden] {
+  display: none !important;
+}
+
 .selection-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1887,4 +1893,11 @@ body.handwriting-open {
   .student-add-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+}
+
+/* Ações do cabeçalho do painel (ex.: Menções: exportar + atualizar) */
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

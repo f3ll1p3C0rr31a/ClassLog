@@ -196,3 +196,34 @@ check('roster marca transferido', run(`getStudentMap().get('ARTHUR CARVALHO THOE
 run('rebuildSchoolDependentState()');
 check('seleção descarta transferido', run('state.selectedStudents'), ['ANA NOVA DA SILVA']);
 check('histórico ainda acha registro do transferido', run(`state.historyFilters.subjectType = 'student'; state.historyFilters.subject = 'ARTHUR CARVALHO THOELE'; getFilteredReports().length > 0`), true);
+
+
+console.log('--- menções: filtro por matéria e menção ---');
+run(`state.settings.schools = [{ id: 'fatima', name: 'Fátima' }];
+  state.selectedSchoolId = 'fatima';
+  state.reports = [];
+  state.gradeFilters = { classKey: 'all', termKey: '2026-b1', query: '', subject: 'history', mention: 'EP' };
+  state.gradeRecords = [
+    { schoolId: 'fatima', classKey: '6ano', termKey: '2026-b1', studentFullName: 'ARTHUR CARVALHO THOELE', formalAssessments: { ab: 'ND', abRecovery: 'ND' } },
+    { schoolId: 'fatima', classKey: '7ano', termKey: '2026-b1', studentFullName: getCurrentClassGroups().find((g) => g.key === '7ano').students[0], formalAssessments: { philosophyAb: 'ND', philosophyAbRecovery: 'ND' } },
+  ];`);
+check('EP em História pega só quem tem AB de História baixo', run(`getFilteredGradeStudents().map((row) => row.student.fullName)`), ['ARTHUR CARVALHO THOELE']);
+run(`state.gradeFilters.subject = 'philosophy';`);
+check('EP em Filosofia pega o aluno do 7 ano', run(`getFilteredGradeStudents().map((row) => row.student.classKey)`), ['7ano']);
+run(`state.gradeFilters.subject = '';`);
+check('sem matéria escolhida, pega os dois', run(`getFilteredGradeStudents().length`), 2);
+run(`state.gradeFilters.mention = 'AE';`);
+check('menção sem ninguém devolve lista vazia', run(`getFilteredGradeStudents().length`), 0);
+run(`state.gradeFilters.mention = ''; state.gradeFilters.classKey = '6ano';`);
+check('uma turma só lista a turma', run(`new Set(getFilteredGradeStudents().map((row) => row.student.classKey)).size`), 1);
+check('turma só traz os ativos', run(`getFilteredGradeStudents().every((row) => !row.student.transferred)`), true);
+
+console.log('--- menções: resumo e PDF ---');
+run(`state.gradeFilters.classKey = 'all'; state.gradeFilters.mention = ''; state.gradeFilters.subject = 'history';`);
+check('resumo conta EP de História', run(`summarizeGradeRows(getFilteredGradeStudents()).history.EP`), 1);
+check('resumo conta reprovado de História', run(`summarizeGradeRows(getFilteredGradeStudents()).historyFailed`), 1);
+const gradesHtml = run('buildGradesReportDocument(getFilteredGradeStudents())');
+check('PDF de menções tem doctype', gradesHtml.slice(0, 15).toLowerCase(), '<!doctype html>');
+check('PDF de menções usa nome oficial', gradesHtml.includes('Arthur Carvalho Thoele'), true);
+check('PDF de menções mostra a turma', gradesHtml.includes('6 ano'), true);
+check('PDF de menções descreve o recorte', gradesHtml.includes('Todas as turmas'), true);

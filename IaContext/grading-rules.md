@@ -80,7 +80,10 @@ const philosophyFinalAverage = (
 ) / 4;
 ```
 `mentionFromAverage(points)` converte o número de volta para menção:
-`<0→ND, <5→EP, <6→A, <9→AL, else AE`. `ND`/`EP` final = reprovado.
+`<1.5→ND, <4→EP, <6→A, <8→AL, else AE` (confira no `app.js` antes de confiar —
+esta linha já esteve errada aqui). `ND`/`EP` final = reprovado. Para dar EP final
+com Atv/CeV/Integrada em A (5 cada), o Bimestral precisa ser ND: (5+5+0+5)/4 =
+3.75. Com Bimestral EP a média dá 4.5, que ainda é A.
 
 Existe uma sobrescrita manual (`overrides.formal`) que, se preenchida, substitui
 **tanto** o Bimestral quanto a Integrada de História ao mesmo tempo (não tem

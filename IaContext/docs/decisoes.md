@@ -48,3 +48,11 @@ Regra: exibicao e apelidos valem so na tela. O PDF do Historico (que vai para os
 Decisao: transferencia e marcacao (`studentNames[nome].transferredAt`), nao remocao; alunos novos ficam em `school.addedStudents` e sao somados a lista fixa do `app.js`.
 
 Motivo: o aluno transferido tem registros e mencoes antigos que precisam continuar aparecendo no Historico e no PDF. So aluno incluido pela Configuracao pode ser removido (para corrigir erro de digitacao).
+
+## Filtro por menção e relatório de menções
+
+Decisao: a guia Mencoes ganhou "Todas as turmas", filtro por materia (Historia/Filosofia) e por mencao final, e um PDF que sai do mesmo recorte da tela.
+
+Motivo: listar rapido quem fechou com determinada mencao (ex.: EP em Historia) e levar o fechamento das turmas todas para papel.
+
+Detalhes: `getFilteredGradeStudents()` e a unica fonte da tabela, do "selecionar todos" e do PDF, para os tres mostrarem o mesmo recorte. Com "Todas as turmas" a turma do registro vem do aluno (`getStudentClassKey`), nao do filtro. O PDF usa nome oficial completo, como os outros relatorios.
