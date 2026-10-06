@@ -177,7 +177,7 @@ const storageKeys = {
   schoolOverride: 'classlog-school-override-v1',
 };
 
-const appVersion = '1.4.5';
+const appVersion = '1.4.6';
 const appStage = 'ALPHA';
 const offlineSessionDurationMs = 7 * 24 * 60 * 60 * 1000;
 const syncIntervalMs = 60 * 1000;
@@ -273,10 +273,12 @@ const state = {
     classKey: '',
     termKey: '',
     query: '',
-    // 'all' lista as turmas todas de uma vez; subject/mention filtram pelo
-    // fechamento final de cada matéria.
+    // 'all' lista as turmas todas de uma vez; subject escolhe a matéria, mention
+    // filtra pela menção calculada e status pela tag Aprovado/Reprovado do
+    // fechamento (que pode ter sido marcada à mão e não mexe na menção).
     subject: '',
     mention: '',
+    status: '',
   },
   gradeSelection: new Set(),
   gradeBulkEditMode: false,
@@ -451,6 +453,7 @@ const elements = {
   gradesSearch: $('gradesSearch'),
   gradesSubjectSelect: $('gradesSubjectSelect'),
   gradesMentionSelect: $('gradesMentionSelect'),
+  gradesStatusSelect: $('gradesStatusSelect'),
   gradesExportButton: $('gradesExportButton'),
   gradesRefreshButton: $('gradesRefreshButton'),
   gradesHint: $('gradesHint'),
@@ -1800,12 +1803,22 @@ function getSubjectFinalMentions(grades) {
   return { history: grades.finalMentions.final, philosophy: grades.finalMentions.philosophyFinal };
 }
 
+// Situação de cada matéria: respeita a marcação manual de Aprovado/Reprovado,
+// que é o que vale no fechamento.
+function getSubjectStatuses(grades) {
+  return { history: grades.status, philosophy: grades.philosophyStatus };
+}
+
+function matchesBySubject(values, wanted, subject = state.gradeFilters.subject) {
+  if (subject === 'history') return values.history === wanted;
+  if (subject === 'philosophy') return values.philosophy === wanted;
+  return values.history === wanted || values.philosophy === wanted;
+}
+
 function gradesMatchMentionFilter(grades, filters = state.gradeFilters) {
-  if (!filters.mention) return true;
-  const finals = getSubjectFinalMentions(grades);
-  if (filters.subject === 'history') return finals.history === filters.mention;
-  if (filters.subject === 'philosophy') return finals.philosophy === filters.mention;
-  return finals.history === filters.mention || finals.philosophy === filters.mention;
+  if (filters.mention && !matchesBySubject(getSubjectFinalMentions(grades), filters.mention, filters.subject)) return false;
+  if (filters.status && !matchesBySubject(getSubjectStatuses(grades), filters.status, filters.subject)) return false;
+  return true;
 }
 
 // Lista única usada pela tabela, pelo "selecionar todos" e pelo PDF, para os
@@ -1882,6 +1895,17 @@ function renderGradeControls() {
       elements.gradesMentionSelect.appendChild(node);
     });
     elements.gradesMentionSelect.value = state.gradeFilters.mention;
+  }
+
+  if (elements.gradesStatusSelect) {
+    elements.gradesStatusSelect.innerHTML = '';
+    [['', 'Todas as situações'], ['approved', 'Aprovado'], ['failed', 'Reprovado']].forEach(([value, label]) => {
+      const node = document.createElement('option');
+      node.value = value;
+      node.textContent = label;
+      elements.gradesStatusSelect.appendChild(node);
+    });
+    elements.gradesStatusSelect.value = state.gradeFilters.status;
   }
 }
 
@@ -2651,8 +2675,10 @@ function describeGradesScope() {
     ? 'Todas as turmas'
     : getCurrentClassGroups().find((group) => group.key === (filters.classKey || state.selectedClass))?.label || 'Turma';
   const term = getTermOptions().find((option) => option.value === filters.termKey)?.label || filters.termKey;
-  const mention = filters.mention ? `${getGradeSubjectLabel()} = ${filters.mention}` : getGradeSubjectLabel();
-  return `${classLabel} · ${term} · ${mention}`;
+  const statusLabels = { approved: 'Aprovado', failed: 'Reprovado' };
+  const parts = [filters.mention, statusLabels[filters.status]].filter(Boolean).join(' e ');
+  const focus = parts ? `${getGradeSubjectLabel()} = ${parts}` : getGradeSubjectLabel();
+  return `${classLabel} · ${term} · ${focus}`;
 }
 
 function summarizeGradeRows(rows) {
@@ -4949,6 +4975,13 @@ function bindEvents() {
   if (elements.gradesMentionSelect) {
     elements.gradesMentionSelect.addEventListener('change', () => {
       state.gradeFilters.mention = elements.gradesMentionSelect.value;
+      renderGrades();
+    });
+  }
+
+  if (elements.gradesStatusSelect) {
+    elements.gradesStatusSelect.addEventListener('change', () => {
+      state.gradeFilters.status = elements.gradesStatusSelect.value;
       renderGrades();
     });
   }

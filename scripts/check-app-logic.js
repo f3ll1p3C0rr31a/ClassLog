@@ -202,7 +202,7 @@ console.log('--- menções: filtro por matéria e menção ---');
 run(`state.settings.schools = [{ id: 'fatima', name: 'Fátima' }];
   state.selectedSchoolId = 'fatima';
   state.reports = [];
-  state.gradeFilters = { classKey: 'all', termKey: '2026-b1', query: '', subject: 'history', mention: 'EP' };
+  state.gradeFilters = { classKey: 'all', termKey: '2026-b1', query: '', subject: 'history', mention: 'EP', status: '' };
   state.gradeRecords = [
     { schoolId: 'fatima', classKey: '6ano', termKey: '2026-b1', studentFullName: 'ARTHUR CARVALHO THOELE', formalAssessments: { ab: 'ND', abRecovery: 'ND' } },
     { schoolId: 'fatima', classKey: '7ano', termKey: '2026-b1', studentFullName: getCurrentClassGroups().find((g) => g.key === '7ano').students[0], formalAssessments: { philosophyAb: 'ND', philosophyAbRecovery: 'ND' } },
@@ -217,6 +217,24 @@ check('menção sem ninguém devolve lista vazia', run(`getFilteredGradeStudents
 run(`state.gradeFilters.mention = ''; state.gradeFilters.classKey = '6ano';`);
 check('uma turma só lista a turma', run(`new Set(getFilteredGradeStudents().map((row) => row.student.classKey)).size`), 1);
 check('turma só traz os ativos', run(`getFilteredGradeStudents().every((row) => !row.student.transferred)`), true);
+
+console.log('--- menções: filtro por situação (Aprovado/Reprovado) ---');
+// Reprovado marcado à mão não mexe na menção: o filtro de situação é a única
+// forma de achar esse aluno. Foi o caso relatado (reprovado só em Filosofia).
+run(`globalThis.recordsBefore = state.gradeRecords;
+  globalThis.filtersBefore = state.gradeFilters;
+  state.gradeFilters = { classKey: 'all', termKey: '2026-b1', query: '', subject: '', mention: '', status: '' };
+  state.gradeRecords = [{ schoolId: 'fatima', classKey: '9ano', termKey: '2026-b1', studentFullName: 'DAVI OLIVEIRA DE LISCIO', formalAssessments: {}, philosophyStatusOverride: 'failed' }];`);
+check('menção dele continua A em Filosofia', run(`calculateStudentGrades(getStudentMap().get('DAVI OLIVEIRA DE LISCIO')).finalMentions.philosophyFinal`), 'A');
+run(`state.gradeFilters.status = 'failed'; state.gradeFilters.subject = 'philosophy';`);
+check('Filosofia + Reprovado acha ele', run(`getFilteredGradeStudents().map((row) => row.student.fullName)`), ['DAVI OLIVEIRA DE LISCIO']);
+run(`state.gradeFilters.subject = 'history';`);
+check('História + Reprovado não acha (ele passou em História)', run(`getFilteredGradeStudents().length`), 0);
+run(`state.gradeFilters.subject = '';`);
+check('as duas matérias + Reprovado acha ele', run(`getFilteredGradeStudents().length`), 1);
+run(`state.gradeFilters.status = 'approved'; state.gradeFilters.subject = 'philosophy';`);
+check('Filosofia + Aprovado não traz quem reprovou', run(`getFilteredGradeStudents().some((row) => row.student.fullName === 'DAVI OLIVEIRA DE LISCIO')`), false);
+run(`state.gradeRecords = recordsBefore; state.gradeFilters = filtersBefore;`);
 
 console.log('--- menções: resumo e PDF ---');
 run(`state.gradeFilters.classKey = 'all'; state.gradeFilters.mention = ''; state.gradeFilters.subject = 'history';`);

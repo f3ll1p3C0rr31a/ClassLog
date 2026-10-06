@@ -55,4 +55,10 @@ Decisao: a guia Mencoes ganhou "Todas as turmas", filtro por materia (Historia/F
 
 Motivo: listar rapido quem fechou com determinada mencao (ex.: EP em Historia) e levar o fechamento das turmas todas para papel.
 
+Filtro de situacao: a tag Aprovado/Reprovado do Fechamento pode ser marcada a mao
+(`statusOverride`/`philosophyStatusOverride`) e **nao** altera a mencao calculada.
+Por isso existem dois filtros separados: "Mencao final" (EP, A, ...) e "Situacao
+(fechamento)" (Aprovado/Reprovado). Filtrar so por mencao nao acha quem foi
+reprovado na mao — foi o que o usuario encontrou no 9 ano.
+
 Detalhes: `getFilteredGradeStudents()` e a unica fonte da tabela, do "selecionar todos" e do PDF, para os tres mostrarem o mesmo recorte. Com "Todas as turmas" a turma do registro vem do aluno (`getStudentClassKey`), nao do filtro. O PDF usa nome oficial completo, como os outros relatorios.
